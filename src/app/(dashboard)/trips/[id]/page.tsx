@@ -19,7 +19,7 @@ export default function TripDetailPage() {
 
   useEffect(() => {
     if (tripId) {
-      tripService.getTripById(tripId).then(res => setTrip(res.data));
+      tripService.getTripById(tripId).then(res => setTrip(res.data ?? null));
     }
   }, [tripId]);
 

@@ -27,7 +27,7 @@ export default function TripsPage() {
   const [newNotes, setNewNotes] = useState('');
 
   useEffect(() => {
-    tripService.getTrips().then(res => setTrips(res.data));
+    tripService.getTrips().then(res => setTrips(res.data ?? []));
     const unsubscribe = tripService.subscribe(updated => setTrips(updated));
     return () => unsubscribe();
   }, []);

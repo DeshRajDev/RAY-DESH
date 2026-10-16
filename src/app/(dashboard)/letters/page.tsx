@@ -35,7 +35,7 @@ export default function LettersPage() {
   const [newSealColor, setNewSealColor] = useState<LoveLetter['waxSealColor']>('monochrome-silver');
 
   useEffect(() => {
-    letterService.getLetters().then(res => setLetters(res.data));
+    letterService.getLetters().then(res => setLetters(res.data ?? []));
     const unsubscribe = letterService.subscribe(updated => setLetters(updated));
     return () => unsubscribe();
   }, []);

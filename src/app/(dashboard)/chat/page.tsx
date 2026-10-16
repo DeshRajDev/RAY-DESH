@@ -138,7 +138,7 @@ export default function ChatPage() {
   }, [user.id, partner.id]);
 
   useEffect(() => {
-    chatService.getMessages().then(res => setMessages(res.data));
+    chatService.getMessages().then(res => setMessages(res.data ?? []));
     const unsubscribe = chatService.subscribe(updated => setMessages(updated));
     return () => unsubscribe();
   }, []);

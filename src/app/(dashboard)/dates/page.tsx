@@ -34,7 +34,7 @@ export default function DatesPage() {
   const [isRecurring, setIsRecurring] = useState(true);
 
   useEffect(() => {
-    dateService.getDates().then(res => setDates(res.data));
+    dateService.getDates().then(res => setDates(res.data ?? []));
     const unsubscribe = dateService.subscribe(updated => setDates(updated));
     return () => unsubscribe();
   }, []);

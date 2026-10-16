@@ -20,7 +20,7 @@ export default function MemoryDetailPage() {
 
   useEffect(() => {
     if (memoryId) {
-      memoryService.getMemoryById(memoryId).then(res => setMemory(res.data));
+      memoryService.getMemoryById(memoryId).then(res => setMemory(res.data ?? null));
     }
   }, [memoryId]);
 
@@ -34,7 +34,7 @@ export default function MemoryDetailPage() {
 
   const handleToggleFavorite = async () => {
     const updated = await memoryService.toggleFavorite(memory.id);
-    setMemory(updated.data);
+    setMemory(updated.data ?? null);
     triggerHeartEffect();
   };
 

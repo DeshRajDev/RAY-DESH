@@ -66,13 +66,13 @@ export default function StoriesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    storyService.getStories().then(res => setStories(res.data));
-    storyService.getArchivedStories().then(res => setArchivedStories(res.data));
-    musicService.getSongs().then(res => setAvailableSongs(res.data));
+    storyService.getStories().then(res => setStories(res.data ?? []));
+    storyService.getArchivedStories().then(res => setArchivedStories(res.data ?? []));
+    musicService.getSongs().then(res => setAvailableSongs(res.data ?? []));
 
     const unsubscribe = storyService.subscribe(updated => {
       setStories(updated);
-      storyService.getArchivedStories().then(res => setArchivedStories(res.data));
+      storyService.getArchivedStories().then(res => setArchivedStories(res.data ?? []));
     });
     return () => unsubscribe();
   }, []);

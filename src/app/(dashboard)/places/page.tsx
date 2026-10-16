@@ -26,7 +26,7 @@ export default function PlacesPage() {
   const [newVisitedDate, setNewVisitedDate] = useState('');
 
   useEffect(() => {
-    placeService.getPlaces(activeTab).then(res => setPlaces(res.data));
+    placeService.getPlaces(activeTab).then(res => setPlaces(res.data ?? []));
     const unsubscribe = placeService.subscribe(updated => {
       setPlaces(updated.filter(p => p.category === activeTab));
     });

@@ -32,7 +32,7 @@ export default function JournalPage() {
   const [newMusic, setNewMusic] = useState('');
 
   useEffect(() => {
-    journalService.getEntries().then(res => setEntries(res.data));
+    journalService.getEntries().then(res => setEntries(res.data ?? []));
     const unsubscribe = journalService.subscribe(updated => setEntries(updated));
     return () => unsubscribe();
   }, []);

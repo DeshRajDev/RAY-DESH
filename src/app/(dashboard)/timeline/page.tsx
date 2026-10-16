@@ -23,7 +23,7 @@ export default function TimelinePage() {
   const [newQuote, setNewQuote] = useState('');
 
   useEffect(() => {
-    timelineService.getMilestones().then(res => setMilestones(res.data));
+    timelineService.getMilestones().then(res => setMilestones(res.data ?? []));
     const unsubscribe = timelineService.subscribe(updated => setMilestones(updated));
     return () => unsubscribe();
   }, []);

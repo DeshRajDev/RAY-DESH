@@ -16,7 +16,7 @@ export default function PostsFeedPage() {
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    postService.getPosts().then(res => setPosts(res.data));
+    postService.getPosts().then(res => setPosts(res.data ?? []));
     const unsubscribe = postService.subscribe(updated => setPosts(updated));
     return () => unsubscribe();
   }, []);

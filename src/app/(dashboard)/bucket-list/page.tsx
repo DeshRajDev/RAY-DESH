@@ -35,7 +35,7 @@ export default function BucketListPage() {
   const [newLocation, setNewLocation] = useState('');
 
   useEffect(() => {
-    bucketListService.getItems().then(res => setItems(res.data));
+    bucketListService.getItems().then(res => setItems(res.data ?? []));
     const unsubscribe = bucketListService.subscribe(updated => setItems(updated));
     return () => unsubscribe();
   }, []);

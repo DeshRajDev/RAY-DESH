@@ -33,7 +33,7 @@ export default function MusicPage() {
   const [newNote, setNewNote] = useState('');
 
   useEffect(() => {
-    musicService.getSongs(selectedSection).then(res => setSongs(res.data));
+    musicService.getSongs(selectedSection).then(res => setSongs(res.data ?? []));
     const unsubscribe = musicService.subscribe(updated => {
       if (selectedSection === 'All') setSongs(updated);
       else setSongs(updated.filter(s => s.category === selectedSection));

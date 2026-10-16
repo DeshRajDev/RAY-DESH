@@ -38,7 +38,7 @@ export default function MemoriesPage() {
   const [newTags, setNewTags] = useState('');
 
   useEffect(() => {
-    memoryService.getMemories(selectedCategory).then(res => setMemories(res.data));
+    memoryService.getMemories(selectedCategory).then(res => setMemories(res.data ?? []));
     const unsubscribe = memoryService.subscribe(updated => {
       if (selectedCategory === 'All') setMemories(updated);
       else setMemories(updated.filter(m => m.category === selectedCategory));

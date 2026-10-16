@@ -85,7 +85,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Fetch initial couple profile
     userService.getCoupleProfile().then(res => {
-      setCouple(res.data);
+      setCouple(res.data ?? null);
       setIsAuthenticated(authService.isAuthenticated());
       setCurrentUser(authService.getCurrentUser());
       setPartnerUser(authService.getPartnerUser());
@@ -106,7 +106,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Notifications
     notificationService.getNotifications().then(res => {
-      setNotifications(res.data);
+      setNotifications(res.data ?? []);
     });
     const unsubscribeNotifs = notificationService.subscribe(notifs => {
       setNotifications(notifs);
