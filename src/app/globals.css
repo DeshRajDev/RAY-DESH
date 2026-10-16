@@ -1,0 +1,238 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-primary: #050505;
+    --bg-surface: #0a0a0a;
+    --bg-card: #111111;
+    --bg-card-hover: #171717;
+    --bg-elevated: #1a1a1a;
+    --bg-input: #0d0d0d;
+    --border-subtle: rgba(255, 255, 255, 0.07);
+    --border-prominent: rgba(255, 255, 255, 0.15);
+    --text-primary: #ffffff;
+    --text-secondary: #aaaaaa;
+    --text-muted: #777777;
+    --text-dim: #444444;
+    --clay-shadow-outer: 0 10px 30px -10px rgba(0, 0, 0, 0.9), 0 4px 6px -2px rgba(0, 0, 0, 0.6);
+    --clay-shadow-inner: inset 0 1px 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 2px 0 rgba(0, 0, 0, 0.6);
+    --clay-btn-shadow: 0 4px 12px rgba(0, 0, 0, 0.7), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+    --clay-btn-active: inset 0 2px 4px rgba(0, 0, 0, 0.8);
+    --clay-input-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8), 0 1px 1px rgba(255, 255, 255, 0.05);
+  }
+
+  html.light {
+    --bg-primary: #f5f5f5;
+    --bg-surface: #eeeeee;
+    --bg-card: #ffffff;
+    --bg-card-hover: #fcfcfc;
+    --bg-elevated: #f0f0f0;
+    --bg-input: #ebebeb;
+    --border-subtle: rgba(0, 0, 0, 0.08);
+    --border-prominent: rgba(0, 0, 0, 0.18);
+    --text-primary: #0a0a0a;
+    --text-secondary: #444444;
+    --text-muted: #777777;
+    --text-dim: #aaaaaa;
+    --clay-shadow-outer: 0 10px 25px -10px rgba(0, 0, 0, 0.12), 0 4px 8px -2px rgba(0, 0, 0, 0.06);
+    --clay-shadow-inner: inset 0 1px 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 2px 0 rgba(0, 0, 0, 0.06);
+    --clay-btn-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+    --clay-btn-active: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+    --clay-input-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.08), 0 1px 1px rgba(255, 255, 255, 0.8);
+  }
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Claymorphic utilities */
+.clay-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1.5rem;
+  box-shadow: var(--clay-shadow-outer), var(--clay-shadow-inner);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.clay-card-interactive {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1.5rem;
+  box-shadow: var(--clay-shadow-outer), var(--clay-shadow-inner);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.clay-card-interactive:hover {
+  background-color: var(--bg-card-hover);
+  border-color: var(--border-prominent);
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.95), var(--clay-shadow-inner);
+}
+
+.clay-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  user-select: none;
+}
+
+.clay-btn-primary {
+  background: #ffffff;
+  color: #050505;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.2), inset 0 1px 1px rgba(255, 255, 255, 1), inset 0 -2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.clay-btn-primary:hover {
+  background: #f0f0f0;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(255, 255, 255, 0.28), inset 0 1px 1px rgba(255, 255, 255, 1);
+}
+
+.clay-btn-primary:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.clay-btn-secondary {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--clay-btn-shadow);
+}
+
+.clay-btn-secondary:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-prominent);
+  transform: translateY(-1px);
+}
+
+.clay-btn-secondary:active {
+  transform: translateY(1px);
+  box-shadow: var(--clay-btn-active);
+}
+
+.clay-btn-danger {
+  background: #1c1111;
+  color: #e5e5e5;
+  border: 1px solid rgba(255, 75, 75, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 100, 100, 0.2);
+}
+
+.clay-btn-danger:hover {
+  background: #2a1515;
+  border-color: rgba(255, 75, 75, 0.5);
+}
+
+.clay-input {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  color: var(--text-primary);
+  box-shadow: var(--clay-input-shadow);
+  transition: all 0.2s ease;
+}
+
+.clay-input:focus {
+  outline: none;
+  border-color: var(--border-prominent);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.9), 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+.clay-pill {
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8125rem;
+  box-shadow: var(--clay-btn-shadow);
+  transition: all 0.2s ease;
+}
+
+.clay-pill.active {
+  background-color: #ffffff;
+  color: #050505;
+  border-color: #ffffff;
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.25);
+}
+
+/* Chat bubble styles */
+.clay-chat-in {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1.25rem 1.25rem 1.25rem 0.25rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.08);
+}
+
+.clay-chat-out {
+  background: #222222;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1.25rem 1.25rem 0.25rem 1.25rem;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.18);
+}
+
+/* Custom minimal scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Floating heart animation */
+@keyframes floatUpFade {
+  0% {
+    transform: translate(-50%, 0) scale(0.6);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-50%, -40px) scale(1.2);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -90px) scale(1);
+    opacity: 0;
+  }
+}
+
+.animate-float-heart {
+  animation: floatUpFade 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* Soft shimmer effect for loading skeletons */
+@keyframes softShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.clay-skeleton {
+  background: linear-gradient(90deg, #111111 25%, #1c1c1c 50%, #111111 75%);
+  background-size: 200% 100%;
+  animation: softShimmer 2s infinite ease-in-out;
+  border-radius: 0.75rem;
+}
