@@ -14,8 +14,8 @@ export async function connectDatabase(): Promise<typeof mongoose> {
 
     logger.info(`✅ MongoDB Connected successfully: ${conn.connection.host}/${conn.connection.name}`);
 
-    mongoose.connection.on('error', (err) => {
-      logger.error(`MongoDB connection error: ${err.message}`);
+    mongoose.connection.on('error', (err: any) => {
+      logger.error(`MongoDB connection error: ${err.message || String(err)}`);
     });
 
     mongoose.connection.on('disconnected', () => {

@@ -9,7 +9,7 @@
     "build": "tsc",
     "postbuild": "node -e \"const fs = require('fs'); const path = require('path'); const srcDir = path.join('dist', 'src'); if (!fs.existsSync(srcDir)) fs.mkdirSync(srcDir, { recursive: true }); fs.writeFileSync(path.join(srcDir, 'server.js'), \\\"require('../server.js');\\\\n\\\");\"",
     "start": "node dist/server.js",
-    "seed": "ts-node src/seed.ts",
+    "seed": "ts-node --transpile-only src/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
