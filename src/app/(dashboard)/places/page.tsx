@@ -105,13 +105,13 @@ export default function PlacesPage() {
       </div>
 
       {/* Interactive Dark World Map Placeholder */}
-      <div className="relative h-64 sm:h-80 w-full rounded-3xl overflow-hidden border border-white/10 bg-[#0A0A0A] shadow-inner p-6 flex flex-col justify-between">
+      <div className="relative min-h-64 sm:h-80 w-full rounded-3xl overflow-hidden border border-white/10 bg-[#0A0A0A] shadow-inner p-4 sm:p-6 flex flex-col justify-between gap-4">
         {/* Subtle grid lines background */}
         <div className="absolute inset-0 bg-[radial-gradient(#222222_1px,transparent_1px)] [background-size:16px_16px] opacity-40 pointer-events-none" />
 
-        <div className="relative z-10 flex items-center justify-between">
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
           <div className="flex items-center gap-2 text-xs font-mono text-[#AAAAAA]">
-            <MapIcon className="h-4 w-4 text-white" />
+            <MapIcon className="h-4 w-4 text-white shrink-0" />
             <span>Interactive Couple Map Pinboard</span>
           </div>
           <span className="text-[10px] font-mono text-[#666666]">
@@ -224,7 +224,7 @@ export default function PlacesPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs text-[#AAAAAA]">City</label>
               <input
@@ -248,7 +248,7 @@ export default function PlacesPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs text-[#AAAAAA]">Category</label>
               <select

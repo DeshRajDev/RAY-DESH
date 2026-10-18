@@ -90,21 +90,21 @@ export default function PostsFeedPage() {
           />
         </div>
 
-        <div className="flex items-center justify-between pt-2 border-t border-white/5">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-white/5">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <input
               type="text"
               value={newPostPhoto}
               onChange={e => setNewPostPhoto(e.target.value)}
               placeholder="Paste Image URL (optional)..."
-              className="clay-input h-8 w-48 px-3 text-xs placeholder-[#666666]"
+              className="clay-input h-9 sm:h-8 w-full sm:w-48 px-3 text-xs placeholder-[#666666]"
             />
           </div>
 
           <button
             onClick={handleCreatePost}
             disabled={!newPostContent.trim() && !newPostPhoto.trim()}
-            className="clay-btn clay-btn-primary px-5 py-2 text-xs font-medium"
+            className="clay-btn clay-btn-primary w-full sm:w-auto px-5 py-2 text-xs font-medium justify-center"
           >
             Post to Us
           </button>

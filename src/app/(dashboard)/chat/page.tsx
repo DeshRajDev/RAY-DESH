@@ -294,11 +294,11 @@ export default function ChatPage() {
     : messages;
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-[#070707] relative">
+    <div className="flex flex-1 min-h-0 w-full overflow-hidden bg-[#070707] relative">
       {/* Main Chat Column */}
-      <div className="relative flex flex-1 flex-col overflow-hidden border-r border-white/5">
+      <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden border-r border-white/5">
         {/* Chat Top Header */}
-        <div className="flex h-16 items-center justify-between border-b border-white/10 bg-[#0A0A0A]/95 px-4 sm:px-6 backdrop-blur-md z-20">
+        <div className="flex h-16 items-center justify-between border-b border-white/10 bg-[#0A0A0A]/95 px-3 sm:px-6 backdrop-blur-md z-20 shrink-0">
           <div className="flex items-center gap-3">
             <div className="relative">
               <img
@@ -423,8 +423,8 @@ export default function ChatPage() {
 
                   <div className="relative flex items-end gap-1.5 group max-w-[85%] sm:max-w-md">
                     {/* Action triggers for hovering message */}
-                    <div className={`absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 z-20 ${
-                      isMe ? '-left-20' : '-right-20'
+                    <div className={`absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex items-center gap-1 z-20 ${
+                      isMe ? 'right-full mr-1.5' : 'left-full ml-1.5'
                     }`}>
                       <button
                         onClick={() => setReplyMessage(msg)}
@@ -573,8 +573,8 @@ export default function ChatPage() {
         )}
 
         {/* Input Bar */}
-        <div className="border-t border-white/10 bg-[#0A0A0A]/95 p-3 sm:p-4 backdrop-blur-md z-20">
-          <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+        <div className="border-t border-white/10 bg-[#0A0A0A]/95 p-2 sm:p-4 backdrop-blur-md z-20 shrink-0">
+          <form onSubmit={handleSendMessage} className="flex items-center gap-1.5 sm:gap-2">
             {/* Attachment Button */}
             <input
               type="file"
@@ -587,7 +587,7 @@ export default function ChatPage() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               aria-label="Attach Media"
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-[#141414] border border-white/10 text-[#AAAAAA] hover:text-white transition-colors"
+              className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full bg-[#141414] border border-white/10 text-[#AAAAAA] hover:text-white transition-colors"
             >
               <Paperclip className="h-4 w-4" />
             </button>
@@ -597,7 +597,7 @@ export default function ChatPage() {
               type="button"
               onClick={() => setShowEmojiPicker(prev => !prev)}
               aria-label="Emoji Picker"
-              className={`flex h-11 w-11 items-center justify-center rounded-full border transition-colors ${
+              className={`flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full border transition-colors ${
                 showEmojiPicker ? 'bg-white text-black border-white' : 'bg-[#141414] border-white/10 text-[#AAAAAA] hover:text-white'
               }`}
             >
@@ -609,7 +609,7 @@ export default function ChatPage() {
               type="button"
               onClick={handleSendSimulatedVoice}
               aria-label="Voice Note"
-              className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all ${
+              className={`flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
                 isRecordingVoice
                   ? 'bg-red-500 text-white border-red-500 animate-pulse'
                   : 'bg-[#141414] border-white/10 text-[#AAAAAA] hover:text-white'
@@ -623,15 +623,15 @@ export default function ChatPage() {
               type="text"
               value={inputText}
               onChange={handleInputChange}
-              placeholder={isRecordingVoice ? 'Recording voice note...' : `Write a private message to ${partner.name}...`}
-              className="clay-input flex-1 h-11 px-4 text-xs sm:text-sm font-light placeholder-[#555555]"
+              placeholder={isRecordingVoice ? 'Recording voice note...' : `Message ${partner.name}...`}
+              className="clay-input flex-1 min-w-0 h-9 sm:h-11 px-3 sm:px-4 text-xs sm:text-sm font-light placeholder-[#555555]"
             />
 
             {/* Send Button */}
             <button
               type="submit"
               disabled={!inputText.trim() && !activeAttachment}
-              className={`clay-btn h-11 px-5 rounded-full flex items-center justify-center transition-all ${
+              className={`clay-btn h-9 sm:h-11 px-3 sm:px-5 shrink-0 rounded-full flex items-center justify-center transition-all ${
                 inputText.trim() || activeAttachment
                   ? 'clay-btn-primary'
                   : 'bg-[#141414] border border-white/5 text-[#444444] cursor-not-allowed'
@@ -671,43 +671,64 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Right Info Drawer (Desktop or toggled) */}
+      {/* Right Info Drawer (Desktop side panel & Mobile overlay) */}
       <AnimatePresence>
         {showRightInfo && (
-          <motion.div
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 320, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            className="hidden lg:flex flex-col border-l border-white/10 bg-[#0A0A0A] p-6 shrink-0 overflow-y-auto"
-          >
-            <div className="text-center pb-6 border-b border-white/10">
-              <img
-                src={partner.avatar}
-                alt={partner.name}
-                className="h-20 w-20 rounded-full mx-auto object-cover border-2 border-white/20 shadow-xl mb-3"
-              />
-              <h3 className="font-serif text-lg text-white font-normal">{partner.name}</h3>
-              <p className="text-xs text-[#777777]">{partner.nickname}</p>
-              <p className="mt-2 text-xs text-[#AAAAAA] font-light italic">
-                &ldquo;{partner.bio}&rdquo;
-              </p>
-            </div>
+          <>
+            {/* Mobile backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowRightInfo(false)}
+              className="lg:hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ x: '100%', opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: '100%', opacity: 0 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className="fixed lg:static inset-y-0 right-0 z-50 lg:z-auto w-80 max-w-[85vw] flex flex-col border-l border-white/10 bg-[#0A0A0A] p-5 sm:p-6 shrink-0 overflow-y-auto shadow-2xl"
+            >
+              <div className="flex items-center justify-between pb-3 lg:hidden border-b border-white/10 mb-4">
+                <span className="font-serif text-sm text-white font-medium">Partner Profile</span>
+                <button
+                  onClick={() => setShowRightInfo(false)}
+                  className="p-1.5 rounded-full text-[#777777] hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
-            <div className="py-4 space-y-4">
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-widest text-[#777777]">Favorite Song</span>
-                <p className="text-xs text-white mt-0.5">{partner.favoriteSong}</p>
+              <div className="text-center pb-6 border-b border-white/10">
+                <img
+                  src={partner.avatar}
+                  alt={partner.name}
+                  className="h-20 w-20 rounded-full mx-auto object-cover border-2 border-white/20 shadow-xl mb-3"
+                />
+                <h3 className="font-serif text-lg text-white font-normal">{partner.name}</h3>
+                <p className="text-xs text-[#777777]">{partner.nickname}</p>
+                <p className="mt-2 text-xs text-[#AAAAAA] font-light italic">
+                  &ldquo;{partner.bio}&rdquo;
+                </p>
               </div>
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-widest text-[#777777]">Favorite Place</span>
-                <p className="text-xs text-white mt-0.5">{partner.favoritePlace}</p>
+
+              <div className="py-4 space-y-4">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#777777]">Favorite Song</span>
+                  <p className="text-xs text-white mt-0.5">{partner.favoriteSong}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#777777]">Favorite Place</span>
+                  <p className="text-xs text-white mt-0.5">{partner.favoritePlace}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#777777]">Shared Pinned Messages</span>
+                  <p className="text-xs text-white mt-0.5">{pinnedMessages.length} saved in this chat</p>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-widest text-[#777777]">Shared Pinned Messages</span>
-                <p className="text-xs text-white mt-0.5">{pinnedMessages.length} saved in this chat</p>
-              </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 

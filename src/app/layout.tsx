@@ -3,8 +3,8 @@ import "./globals.css";
 import { AppProvider } from "@/stores/app-context";
 
 export const metadata: Metadata = {
-  title: "Desh & Rey — Our Private Sanctuary",
-  description: "A private digital home for Desh & Rey to preserve conversations, memories, songs, trips, and relationship milestones.",
+  title: "Ray — किरण",
+  description: "A private digital home to preserve conversations, memories, songs, trips, and relationship milestones for Ray — किरण.",
 };
 
 export default function RootLayout({

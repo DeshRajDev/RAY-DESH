@@ -177,10 +177,10 @@ export default function BirthdayPage() {
         </div>
 
         {/* Celebrant Switcher Pills */}
-        <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-[#121212] border border-white/10 shrink-0">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 p-1.5 rounded-2xl bg-[#121212] border border-white/10 w-full sm:w-auto">
           <button
             onClick={() => setSelectedCelebrantId('user_2')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+            className={`flex-1 sm:flex-none px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-medium transition-all ${
               selectedCelebrantId === 'user_2'
                 ? 'bg-white text-black shadow-md'
                 : 'text-[#888888] hover:text-white'
@@ -190,7 +190,7 @@ export default function BirthdayPage() {
           </button>
           <button
             onClick={() => setSelectedCelebrantId('user_1')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+            className={`flex-1 sm:flex-none px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-medium transition-all ${
               selectedCelebrantId === 'user_1'
                 ? 'bg-white text-black shadow-md'
                 : 'text-[#888888] hover:text-white'
@@ -202,8 +202,8 @@ export default function BirthdayPage() {
       </div>
 
       {/* 2. Hero Countdown / Celebration Banner */}
-      <div className="relative rounded-3xl border border-white/10 bg-gradient-to-b from-[#181818] via-[#101010] to-[#080808] p-6 sm:p-10 shadow-xl flex flex-col md:flex-row items-center justify-between gap-8 overflow-hidden">
-        <div className="space-y-3 text-center md:text-left z-10">
+      <div className="relative rounded-3xl border border-white/10 bg-gradient-to-b from-[#181818] via-[#101010] to-[#080808] p-5 sm:p-10 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 sm:gap-8 overflow-hidden">
+        <div className="space-y-3 text-center md:text-left z-10 w-full md:w-auto">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1 text-xs font-mono text-white border border-white/15">
             <Star className="h-3 w-3 text-white fill-white" />
             <span>
@@ -213,7 +213,7 @@ export default function BirthdayPage() {
             </span>
           </div>
 
-          <h2 className="font-serif text-3xl sm:text-4xl text-white font-light tracking-tight">
+          <h2 className="font-serif text-2xl sm:text-4xl text-white font-light tracking-tight">
             {isToday
               ? `Happy Birthday, ${celebrant.name}! ❤️`
               : isCurrentUserCelebrant
@@ -221,7 +221,7 @@ export default function BirthdayPage() {
               : `${celebrant.name}'s Birthday Countdown`}
           </h2>
 
-          <p className="text-xs sm:text-sm text-[#AAAAAA] font-light max-w-md leading-relaxed">
+          <p className="text-xs sm:text-sm text-[#AAAAAA] font-light max-w-md mx-auto md:mx-0 leading-relaxed">
             {isToday
               ? `All surprise gifts and love letters are now unlocked for ${celebrant.name}!`
               : isCurrentUserCelebrant
@@ -241,17 +241,17 @@ export default function BirthdayPage() {
         </div>
 
         {/* Live Countdown Grid */}
-        <div className="grid grid-cols-3 gap-3 shrink-0 z-10">
-          <div className="flex flex-col items-center justify-center rounded-2xl bg-[#111111]/90 border border-white/10 p-4 w-24 shadow-inner">
-            <span className="text-3xl font-serif text-white font-light">{countdown.days}</span>
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full sm:w-auto shrink-0 z-10">
+          <div className="flex flex-col items-center justify-center rounded-2xl bg-[#111111]/90 border border-white/10 p-3 sm:p-4 w-full sm:w-24 shadow-inner">
+            <span className="text-2xl sm:text-3xl font-serif text-white font-light">{countdown.days}</span>
             <span className="text-[10px] uppercase font-mono text-[#777777] mt-1">Days</span>
           </div>
-          <div className="flex flex-col items-center justify-center rounded-2xl bg-[#111111]/90 border border-white/10 p-4 w-24 shadow-inner">
-            <span className="text-3xl font-serif text-white font-light">{countdown.hours}</span>
+          <div className="flex flex-col items-center justify-center rounded-2xl bg-[#111111]/90 border border-white/10 p-3 sm:p-4 w-full sm:w-24 shadow-inner">
+            <span className="text-2xl sm:text-3xl font-serif text-white font-light">{countdown.hours}</span>
             <span className="text-[10px] uppercase font-mono text-[#777777] mt-1">Hours</span>
           </div>
-          <div className="flex flex-col items-center justify-center rounded-2xl bg-[#111111]/90 border border-white/10 p-4 w-24 shadow-inner">
-            <span className="text-3xl font-serif text-white font-light">{countdown.minutes}</span>
+          <div className="flex flex-col items-center justify-center rounded-2xl bg-[#111111]/90 border border-white/10 p-3 sm:p-4 w-full sm:w-24 shadow-inner">
+            <span className="text-2xl sm:text-3xl font-serif text-white font-light">{countdown.minutes}</span>
             <span className="text-[10px] uppercase font-mono text-[#777777] mt-1">Minutes</span>
           </div>
         </div>

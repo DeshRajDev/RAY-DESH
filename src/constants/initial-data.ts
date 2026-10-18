@@ -62,7 +62,7 @@ export const initialCouple: Couple = {
   anniversaryDate: '2026-09-27T00:00:00.000Z',
   relationshipStartDate: '2026-09-27T00:00:00.000Z',
   theme: 'dark',
-  customTitle: 'Desh & Rey — Our Sanctuary',
+  customTitle: 'Ray — किरण',
   coupleAvatar: 'https://images.unsplash.com/photo-1522673607200-164d1b6ce486?w=600&auto=format&fit=crop&q=80',
   soundEnabled: true,
   privacyPinEnabled: false,

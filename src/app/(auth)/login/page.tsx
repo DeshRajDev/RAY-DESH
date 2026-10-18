@@ -61,11 +61,17 @@ export default function LoginPage() {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/20 shadow-[0_4px_16px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)]">
             <Heart className="h-7 w-7 fill-white text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]" />
           </div>
-          <h1 className="font-serif text-2xl sm:text-3xl text-white font-light tracking-tight">
-            Desh &amp; Rey — Private Sanctuary
-          </h1>
+          <div className="flex items-center justify-center gap-2">
+            <h1 className="font-serif text-2xl sm:text-3xl text-white font-light tracking-tight">
+              Ray
+            </h1>
+            <span className="text-lg sm:text-xl text-white/40 font-light">—</span>
+            <span className="text-xl sm:text-2xl text-white/90 font-normal">
+              किरण
+            </span>
+          </div>
           <p className="text-xs text-[#888888] font-light">
-            Enter your phone number or email and password to unlock your sanctuary.
+            Enter your phone number or email and password to enter Ray — किरण.
           </p>
         </div>
 

@@ -72,7 +72,7 @@ export function MobileNav() {
   return (
     <>
       {/* Fixed Bottom Nav Bar */}
-      <div className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-[#0A0A0A]/95 backdrop-blur-xl border-t border-white/10 px-3 py-2">
+      <div className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-[#0A0A0A]/95 backdrop-blur-xl border-t border-white/10 px-1.5 sm:px-3 py-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))]">
         <div className="flex items-center justify-around">
           {primaryTabs.map((tab, idx) => {
             const Icon = tab.icon;
@@ -85,10 +85,10 @@ export function MobileNav() {
                   key={idx}
                   onClick={tab.onClick}
                   aria-label="Open More modules"
-                  className="flex flex-col items-center gap-1 py-1 px-3 text-[#777777] hover:text-white transition-colors"
+                  className="flex flex-col items-center gap-0.5 sm:gap-1 py-1 px-1 sm:px-3 text-[#777777] hover:text-white transition-colors"
                 >
-                  <Icon className="h-5 w-5" />
-                  <span className="text-[10px] font-normal tracking-wide">More</span>
+                  <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="text-[9px] sm:text-[10px] font-normal tracking-wide">More</span>
                 </button>
               );
             }
@@ -97,17 +97,17 @@ export function MobileNav() {
               <Link
                 key={tab.href}
                 href={tab.href}
-                className={`relative flex flex-col items-center gap-1 py-1 px-3 transition-all ${
+                className={`relative flex flex-col items-center gap-0.5 sm:gap-1 py-1 px-1 sm:px-3 transition-all ${
                   isActive ? 'text-white font-medium scale-105' : 'text-[#777777] hover:text-[#AAAAAA]'
                 }`}
               >
                 <div className="relative">
-                  <Icon className="h-5 w-5" />
+                  <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                   {tab.badge && (
                     <span className="absolute -top-1 -right-2 h-2 w-2 rounded-full bg-white ring-2 ring-black" />
                   )}
                 </div>
-                <span className="text-[10px] font-normal tracking-wide">{tab.title}</span>
+                <span className="text-[9px] sm:text-[10px] font-normal tracking-wide">{tab.title}</span>
               </Link>
             );
           })}
@@ -131,7 +131,7 @@ export function MobileNav() {
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 26, stiffness: 280 }}
-              className="absolute inset-x-0 bottom-0 max-h-[85vh] rounded-t-3xl bg-[#0D0D0D] border-t border-white/10 p-6 overflow-y-auto z-10"
+              className="absolute inset-x-0 bottom-0 max-h-[85dvh] rounded-t-3xl bg-[#0D0D0D] border-t border-white/10 p-5 sm:p-6 overflow-y-auto z-10 pb-[calc(2.5rem+env(safe-area-inset-bottom,0px))]"
             >
               <div className="flex items-center justify-between pb-4 border-b border-white/10">
                 <h3 className="font-serif text-lg text-white">All Our Modules</h3>

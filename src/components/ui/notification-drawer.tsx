@@ -69,19 +69,19 @@ export function NotificationDrawer() {
             className="absolute inset-y-0 right-0 max-w-md w-full bg-[#0D0D0D] border-l border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.9)] flex flex-col z-10"
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <Bell className="h-4 w-4 text-white" />
-                <h3 className="font-serif text-lg text-white">Our Activity & Alerts</h3>
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-white/10 gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Bell className="h-4 w-4 text-white shrink-0" />
+                <h3 className="font-serif text-base sm:text-lg text-white truncate">Activity & Alerts</h3>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 {notifications.some(n => !n.isRead) && (
                   <button
                     onClick={markAllNotificationsRead}
-                    className="text-xs text-[#888888] hover:text-white flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/5 border border-white/5"
+                    className="text-[11px] sm:text-xs text-[#888888] hover:text-white flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full bg-white/5 border border-white/5"
                   >
                     <Check className="h-3 w-3" />
-                    Mark all read
+                    <span>Mark read</span>
                   </button>
                 )}
                 <button

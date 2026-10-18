@@ -17,14 +17,18 @@ export function Header() {
   } = useApp();
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-white/10 bg-[#070707]/90 px-4 sm:px-8 backdrop-blur-md select-none">
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-white/10 bg-[#070707]/90 px-3 sm:px-8 backdrop-blur-md select-none">
       {/* Mobile brand & left indicator */}
-      <div className="flex items-center gap-3 md:hidden">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#1A1A1A] border border-white/15">
+      <div className="flex items-center gap-2 md:hidden min-w-0">
+        <Link href="/dashboard" className="flex items-center gap-2 min-w-0 group">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#1A1A1A] border border-white/15 shadow-inner">
             <Heart className="h-4 w-4 fill-white text-white" />
           </div>
-          <span className="font-serif text-sm font-medium text-white">Desh &amp; Rey</span>
+          <div className="flex items-baseline gap-1 min-w-0">
+            <span className="font-serif text-sm font-medium text-white tracking-wide">Ray</span>
+            <span className="text-[10px] text-white/40 font-light">—</span>
+            <span className="text-xs font-normal text-white/90 truncate">किरण</span>
+          </div>
         </Link>
       </div>
 
@@ -42,7 +46,7 @@ export function Header() {
       </div>
 
       {/* Right Quick Controls */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
         {/* Birthday Mode button */}
         <button
           onClick={() => triggerBirthdayCelebration(true)}

@@ -48,7 +48,7 @@ export default function SettingsPage() {
             Choose your monochrome visual mood. Both options maintain the pure black, white and grayscale palette.
           </p>
 
-          <div className="grid grid-cols-2 gap-4 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-2">
             <button
               type="button"
               onClick={() => setTheme('dark')}

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Sidebar } from './sidebar';
 import { MobileNav } from './mobile-nav';
 import { Header } from './header';
@@ -12,10 +12,14 @@ import { MediaViewer } from '@/components/ui/media-viewer';
 import { BirthdayCelebration } from '@/components/ui/birthday-celebration';
 import { useApp } from '@/stores/app-context';
 import { Heart, Lock } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { isAuthenticated, floatingHearts } = useApp();
+
+  const isChat = pathname === '/chat';
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -25,13 +29,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#050505] text-[#E5E5E5]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#151515] border border-white/10">
+      <div className="flex h-screen h-dvh w-full items-center justify-center bg-[#050505] text-[#E5E5E5] p-4">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#151515] border border-white/10 shadow-lg">
             <Lock className="h-5 w-5 text-white animate-pulse" />
           </div>
           <p className="font-mono text-xs text-[#777777] uppercase tracking-widest">
-            AUTHENTICATING SANCTUARY ACCESS...
+            AUTHENTICATING RAY — किरण...
           </p>
         </div>
       </div>
@@ -39,15 +43,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#050505] text-[#E5E5E5] select-none antialiased">
+    <div className="flex h-screen h-dvh w-full overflow-hidden bg-[#050505] text-[#E5E5E5] select-none antialiased">
       {/* Left Desktop Sidebar */}
       <Sidebar />
 
       {/* Main View Area */}
-      <div className="relative flex flex-1 flex-col overflow-hidden">
+      <div className="relative flex flex-1 flex-col overflow-hidden min-w-0">
         <Header />
 
-        <main className="flex-1 overflow-y-auto pb-24 md:pb-12">
+        <main
+          className={cn(
+            'flex-1 min-h-0 w-full',
+            isChat
+              ? 'overflow-hidden flex flex-col pb-16 md:pb-0'
+              : 'overflow-y-auto pb-24 md:pb-12'
+          )}
+        >
           {children}
         </main>
 

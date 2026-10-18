@@ -65,12 +65,18 @@ export function Sidebar() {
             <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] group-hover:scale-105 transition-transform">
               <Heart className="h-4 w-4 fill-white text-white" />
             </div>
-            <div>
-              <h1 className="font-serif text-base font-normal tracking-wide text-white leading-tight">
-                Desh &amp; Rey
-              </h1>
-              <p className="text-[10px] font-mono tracking-widest text-[#777777] uppercase">
-                Private Space
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5 leading-tight">
+                <h1 className="font-serif text-lg font-light tracking-wide text-white">
+                  Ray
+                </h1>
+                <span className="text-xs text-white/40 font-light">—</span>
+                <span className="text-sm font-medium text-white/90">
+                  किरण
+                </span>
+              </div>
+              <p className="text-[10px] font-mono tracking-widest text-[#777777] uppercase mt-0.5">
+                Private Sanctuary
               </p>
             </div>
           </Link>

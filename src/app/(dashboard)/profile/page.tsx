@@ -182,7 +182,7 @@ export default function ProfilePage() {
 
               <button
                 onClick={handleOpenEdit}
-                className="clay-btn clay-btn-secondary px-4 py-2 text-xs flex items-center gap-1.5 self-center sm:self-auto shadow-md"
+                className="clay-btn clay-btn-secondary px-4 py-2 text-xs flex items-center justify-center gap-1.5 w-full sm:w-auto shadow-md"
               >
                 <Edit3 className="h-3.5 w-3.5" />
                 <span>Edit Profile &amp; Avatar</span>
@@ -202,18 +202,18 @@ export default function ProfilePage() {
         </div>
 
         {/* Quick Relationship Stats */}
-        <div className="grid grid-cols-3 gap-3 pt-6 border-t border-white/5 text-center">
-          <div className="p-4 rounded-2xl bg-[#141414] border border-white/5">
-            <span className="text-2xl font-serif text-white">{memoriesCount}</span>
-            <span className="text-[10px] font-mono uppercase text-[#777777] block mt-0.5">Memories</span>
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-6 border-t border-white/5 text-center">
+          <div className="p-2.5 sm:p-4 rounded-2xl bg-[#141414] border border-white/5">
+            <span className="text-lg sm:text-2xl font-serif text-white">{memoriesCount}</span>
+            <span className="text-[9px] sm:text-[10px] font-mono uppercase text-[#777777] block mt-0.5 truncate">Memories</span>
           </div>
-          <div className="p-4 rounded-2xl bg-[#141414] border border-white/5">
-            <span className="text-2xl font-serif text-white">{songsCount}</span>
-            <span className="text-[10px] font-mono uppercase text-[#777777] block mt-0.5">Shared Songs</span>
+          <div className="p-2.5 sm:p-4 rounded-2xl bg-[#141414] border border-white/5">
+            <span className="text-lg sm:text-2xl font-serif text-white">{songsCount}</span>
+            <span className="text-[9px] sm:text-[10px] font-mono uppercase text-[#777777] block mt-0.5 truncate">Songs</span>
           </div>
-          <div className="p-4 rounded-2xl bg-[#141414] border border-white/5">
-            <span className="text-2xl font-serif text-white">{bucketDone}</span>
-            <span className="text-[10px] font-mono uppercase text-[#777777] block mt-0.5">Dreams Fulfilled</span>
+          <div className="p-2.5 sm:p-4 rounded-2xl bg-[#141414] border border-white/5">
+            <span className="text-lg sm:text-2xl font-serif text-white">{bucketDone}</span>
+            <span className="text-[9px] sm:text-[10px] font-mono uppercase text-[#777777] block mt-0.5 truncate">Dreams</span>
           </div>
         </div>
 

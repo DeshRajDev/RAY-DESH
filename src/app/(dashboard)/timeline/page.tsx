@@ -75,7 +75,7 @@ export default function TimelinePage() {
       </div>
 
       {/* Vertical Timeline Tree */}
-      <div className="relative pl-6 sm:pl-10 space-y-12 before:absolute before:left-3 sm:before:left-5 before:top-3 before:bottom-3 before:w-[2px] before:bg-gradient-to-b before:from-white/40 before:via-white/20 before:to-transparent">
+      <div className="relative pl-7 sm:pl-10 space-y-8 sm:space-y-12 before:absolute before:left-3 sm:before:left-4 before:top-3 before:bottom-3 before:w-[2px] before:bg-gradient-to-b before:from-white/40 before:via-white/20 before:to-transparent">
         {milestones.map((milestone, idx) => (
           <motion.div
             key={milestone.id}
@@ -85,12 +85,12 @@ export default function TimelinePage() {
             className="relative"
           >
             {/* Timeline node icon */}
-            <div className="absolute -left-9 sm:-left-12 top-1.5 flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full bg-white text-black ring-4 ring-[#070707] shadow-lg">
+            <div className="absolute -left-7 sm:-left-10 top-1.5 flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full bg-white text-black ring-4 ring-[#070707] shadow-lg">
               <Heart className="h-3 w-3 fill-black" />
             </div>
 
             {/* Milestone Card */}
-            <div className="clay-card rounded-3xl p-6 sm:p-8 border border-white/10 bg-[#0F0F0F] space-y-4 shadow-xl">
+            <div className="clay-card rounded-3xl p-4 sm:p-8 border border-white/10 bg-[#0F0F0F] space-y-4 shadow-xl">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-3">
                 <span className="text-xs font-mono text-white bg-white/10 px-3 py-1 rounded-full">
                   {formatDate(milestone.date, 'long')}

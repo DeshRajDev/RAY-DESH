@@ -103,7 +103,7 @@ export function CommandPalette() {
   return (
     <AnimatePresence>
       {isCommandPaletteOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-8 sm:pt-20 px-3 sm:px-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -116,29 +116,29 @@ export function CommandPalette() {
             initial={{ opacity: 0, scale: 0.95, y: -20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
-            className="relative w-full max-w-xl rounded-3xl border border-white/10 bg-[#0E0E0E] p-4 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95),inset_0_1px_1px_rgba(255,255,255,0.15)] z-10"
+            className="relative w-full max-w-xl rounded-3xl border border-white/10 bg-[#0E0E0E] p-3 sm:p-4 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95),inset_0_1px_1px_rgba(255,255,255,0.15)] z-10"
           >
             {/* Search Input */}
             <div className="relative flex items-center border-b border-white/10 pb-3 px-2">
-              <Search className="h-4 w-4 text-[#777777] mr-3" />
+              <Search className="h-4 w-4 text-[#777777] mr-3 shrink-0" />
               <input
                 type="text"
                 autoFocus
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search our memories, songs, chats, places, dates..."
-                className="w-full bg-transparent text-sm text-white placeholder-[#555555] focus:outline-none font-light"
+                placeholder="Search memories, songs, chats, places, dates..."
+                className="w-full min-w-0 bg-transparent text-xs sm:text-sm text-white placeholder-[#555555] focus:outline-none font-light"
               />
               <button
                 onClick={() => setIsCommandPaletteOpen(false)}
-                className="rounded-lg p-1 text-[#777777] hover:text-white"
+                className="rounded-lg p-1 text-[#777777] hover:text-white shrink-0 ml-2"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Results */}
-            <div className="mt-3 max-h-80 overflow-y-auto space-y-1 p-1">
+            <div className="mt-3 max-h-[60vh] sm:max-h-80 overflow-y-auto space-y-1 p-1">
               {results.length === 0 ? (
                 <div className="py-8 text-center text-xs text-[#666666] font-light">
                   No memories or items found matching &quot;{searchQuery}&quot;
@@ -150,24 +150,24 @@ export function CommandPalette() {
                     <button
                       key={i}
                       onClick={() => handleSelect(res.href)}
-                      className="w-full flex items-center justify-between rounded-xl p-3 text-left hover:bg-white/5 transition-colors group"
+                      className="w-full flex items-center justify-between gap-2 rounded-xl p-2.5 sm:p-3 text-left hover:bg-white/5 transition-colors group"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#181818] border border-white/10 text-[#AAAAAA] group-hover:text-white">
+                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#181818] border border-white/10 text-[#AAAAAA] group-hover:text-white">
                           <Icon className="h-4 w-4" />
                         </div>
-                        <div>
-                          <div className="text-xs sm:text-sm font-medium text-[#E5E5E5] group-hover:text-white line-clamp-1">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs sm:text-sm font-medium text-[#E5E5E5] group-hover:text-white truncate">
                             {res.title}
                           </div>
                           {res.subtitle && (
-                            <div className="text-[11px] text-[#777777] font-light line-clamp-1">
+                            <div className="text-[11px] text-[#777777] font-light truncate">
                               {res.subtitle}
                             </div>
                           )}
                         </div>
                       </div>
-                      <span className="text-[10px] uppercase font-mono tracking-wider text-[#555555] bg-white/5 px-2 py-0.5 rounded-full">
+                      <span className="text-[9px] sm:text-[10px] uppercase font-mono tracking-wider text-[#555555] bg-white/5 px-2 py-0.5 rounded-full shrink-0">
                         {res.type}
                       </span>
                     </button>
@@ -177,9 +177,9 @@ export function CommandPalette() {
             </div>
 
             {/* Footer */}
-            <div className="mt-2 border-t border-white/5 pt-2 px-2 flex items-center justify-between text-[11px] font-mono text-[#555555]">
-              <span>Navigate with arrows or click</span>
-              <span>ESC to close</span>
+            <div className="mt-2 border-t border-white/5 pt-2 px-2 flex items-center justify-between text-[10px] sm:text-[11px] font-mono text-[#555555]">
+              <span>Navigate or tap to select</span>
+              <span>ESC / tap outside</span>
             </div>
           </motion.div>
         </div>
