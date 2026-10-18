@@ -5,7 +5,9 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "prebuild": "node -e \"const fs = require('fs'); if (fs.existsSync('dist')) fs.rmSync('dist', { recursive: true, force: true });\"",
     "build": "tsc",
+    "postbuild": "node -e \"const fs = require('fs'); const path = require('path'); const srcDir = path.join('dist', 'src'); if (!fs.existsSync(srcDir)) fs.mkdirSync(srcDir, { recursive: true }); fs.writeFileSync(path.join(srcDir, 'server.js'), \\\"require('../server.js');\\\\n\\\");\"",
     "start": "node dist/server.js",
     "seed": "ts-node src/seed.ts",
     "test": "vitest run",
