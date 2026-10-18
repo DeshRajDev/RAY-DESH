@@ -1,7 +1,8 @@
 import { Song, ApiResponse } from '@/types';
 import { initialSongs } from '@/constants/initial-data';
+import { ApiClient } from './api/client';
 
-const MUSIC_STORAGE_KEY = 'sanctuary_music_songs_v2';
+const MUSIC_STORAGE_KEY = 'sanctuary_music_songs_v3';
 const OFFLINE_AUDIO_KEY = 'sanctuary_offline_audio_v2';
 
 export interface PlayerState {
@@ -64,14 +65,18 @@ class MusicService {
       try {
         const stored = localStorage.getItem(MUSIC_STORAGE_KEY);
         if (stored) {
-          this.songs = JSON.parse(stored);
-          return;
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.some(s => s.title === 'Love Note' || s.title === 'Samjhawan')) {
+            this.songs = parsed;
+            return;
+          }
         }
       } catch {
         // ignore
       }
     }
     this.songs = [...initialSongs];
+    this.saveSongs();
   }
 
   private saveSongs() {
@@ -213,6 +218,34 @@ class MusicService {
   }
 
   public async getSongs(category?: string): Promise<ApiResponse<Song[]>> {
+    try {
+      if (typeof window !== 'undefined') {
+        const res = await ApiClient.getInstance().get<{ success: boolean; data: any[] }>('/music');
+        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const formatted: Song[] = res.data.map(item => ({
+            id: item.id || item._id,
+            title: item.title,
+            artist: item.artist,
+            album: item.album || '',
+            duration: item.duration || 180,
+            coverUrl: item.coverUrl,
+            audioUrl: item.audioUrl,
+            addedById: item.addedById,
+            addedByName: item.addedByName || 'Sanctuary',
+            dateAdded: item.createdAt || new Date().toISOString(),
+            isFavorite: !!item.isFavorite,
+            category: (item.category as Song['category']) || 'Our Songs',
+            lyricsSnippet: item.lyricsSnippet,
+            note: item.note,
+          }));
+          this.songs = formatted;
+          this.saveSongs();
+        }
+      }
+    } catch {
+      // Fallback to local songs
+    }
+
     if (category && category !== 'All') {
       return { success: true, data: this.songs.filter(s => s.category === category) };
     }

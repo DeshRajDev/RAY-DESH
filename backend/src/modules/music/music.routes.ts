@@ -22,7 +22,7 @@ router.get('/', authenticate, requireCouple, async (req: AuthenticatedRequest, r
 // POST add song
 router.post('/', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { title, artist, album, coverUrl, audioUrl, duration = 180, spotifyUrl } = req.body;
+    const { title, artist, album, coverUrl, audioUrl, duration = 180, spotifyUrl, category = 'Our Songs', addedByName, lyricsSnippet, note } = req.body;
 
     const song = await Song.create({
       coupleId: new mongoose.Types.ObjectId(req.couple!.id),
@@ -34,6 +34,10 @@ router.post('/', authenticate, requireCouple, async (req: AuthenticatedRequest, 
       duration,
       spotifyUrl,
       addedById: new mongoose.Types.ObjectId(req.user!.id),
+      addedByName: addedByName || req.user!.name || 'Sanctuary',
+      category,
+      lyricsSnippet,
+      note,
       isFavorite: false,
       playCount: 0,
     });

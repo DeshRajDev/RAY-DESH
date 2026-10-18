@@ -53,9 +53,11 @@ export function createApp(): Express {
   // Rate Limiting
   app.use('/api', apiLimiter);
 
-  // Serve local uploaded files statically
+  // Serve local uploaded files and songs statically
   const uploadsPath = path.resolve(process.cwd(), env.UPLOAD_DIR);
   app.use('/uploads', express.static(uploadsPath));
+  const songsPath = path.resolve(process.cwd(), 'songs');
+  app.use('/songs', express.static(songsPath));
 
   // Health check endpoint
   app.get('/health', (_req: Request, res: Response) => {

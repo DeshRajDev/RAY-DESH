@@ -10,6 +10,10 @@ export interface ISong extends Document {
   duration: number; // in seconds
   spotifyUrl?: string;
   addedById: mongoose.Types.ObjectId;
+  addedByName?: string;
+  category?: string;
+  lyricsSnippet?: string;
+  note?: string;
   isFavorite: boolean;
   playCount: number;
   createdAt: Date;
@@ -27,6 +31,10 @@ const songSchema = new Schema<ISong>(
     duration: { type: Number, default: 180 },
     spotifyUrl: { type: String },
     addedById: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    addedByName: { type: String },
+    category: { type: String, default: 'Our Songs' },
+    lyricsSnippet: { type: String },
+    note: { type: String },
     isFavorite: { type: Boolean, default: false, index: true },
     playCount: { type: Number, default: 0 },
   },
