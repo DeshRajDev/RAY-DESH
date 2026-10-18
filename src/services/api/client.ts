@@ -3,7 +3,16 @@
  * When connecting to Node.js/Express backend, configure NEXT_PUBLIC_API_URL.
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+function getApiBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+  let cleaned = raw.trim().replace(/\/+$/, '');
+  if (!cleaned.endsWith('/api/v1')) {
+    cleaned += '/api/v1';
+  }
+  return cleaned;
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean>;
