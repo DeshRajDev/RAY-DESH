@@ -1,9 +1,54 @@
 import { NotificationItem, ApiResponse } from '@/types';
 import { initialNotifications } from '@/constants/initial-data';
 
+const NOTIFICATIONS_STORAGE_KEY = 'sanctuary_notifications_v2';
+
 class NotificationService {
-  private notifications: NotificationItem[] = [...initialNotifications];
+  private notifications: NotificationItem[] = [];
   private listeners: ((notifications: NotificationItem[]) => void)[] = [];
+
+  constructor() {
+    this.loadNotifications();
+  }
+
+  private loadNotifications(): void {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            this.notifications = parsed;
+            return;
+          }
+        }
+      } catch {
+        // Fallback to initial
+      }
+    }
+    this.notifications = [...initialNotifications];
+  }
+
+  private saveNotifications(): void {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(this.notifications));
+      } catch {
+        // Ignore quota error
+      }
+    }
+  }
+
+  public async requestPermission(): Promise<NotificationPermission> {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      return 'denied';
+    }
+    try {
+      return await Notification.requestPermission();
+    } catch {
+      return 'default';
+    }
+  }
 
   public async getNotifications(): Promise<ApiResponse<NotificationItem[]>> {
     return { success: true, data: [...this.notifications] };
@@ -13,17 +58,31 @@ class NotificationService {
     const notif = this.notifications.find(n => n.id === id);
     if (!notif) throw new Error('Notification not found');
     notif.isRead = true;
+    this.saveNotifications();
     this.notify();
     return { success: true, data: { ...notif } };
   }
 
   public async markAllAsRead(): Promise<ApiResponse<boolean>> {
     this.notifications.forEach(n => { n.isRead = true; });
+    this.saveNotifications();
     this.notify();
     return { success: true, data: true };
   }
 
   public async addNotification(payload: Omit<NotificationItem, 'id' | 'timestamp' | 'isRead'>): Promise<ApiResponse<NotificationItem>> {
+    // Prevent immediate duplicate notifications within the last 5 minutes
+    const isDuplicate = this.notifications.some(n => 
+      n.title === payload.title &&
+      n.description === payload.description &&
+      (Date.now() - new Date(n.timestamp).getTime()) < 5 * 60 * 1000
+    );
+
+    if (isDuplicate) {
+      const existing = this.notifications.find(n => n.title === payload.title)!;
+      return { success: true, data: existing };
+    }
+
     const newNotif: NotificationItem = {
       ...payload,
       id: `notif_${Date.now()}`,
@@ -31,7 +90,23 @@ class NotificationService {
       isRead: false,
     };
     this.notifications.unshift(newNotif);
+    this.saveNotifications();
     this.notify();
+
+    // Trigger browser notification if supported and permitted
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(payload.title, {
+          body: payload.description,
+          icon: '/icons/icon-192.png',
+          badge: '/icons/icon-192.png',
+          tag: newNotif.id,
+        });
+      } catch {
+        // Notification API fallback
+      }
+    }
+
     return { success: true, data: newNotif };
   }
 

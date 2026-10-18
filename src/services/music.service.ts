@@ -2,13 +2,26 @@ import { Song, ApiResponse } from '@/types';
 import { initialSongs } from '@/constants/initial-data';
 
 const MUSIC_STORAGE_KEY = 'sanctuary_music_songs_v2';
+const OFFLINE_AUDIO_KEY = 'sanctuary_offline_audio_v2';
+
+export interface PlayerState {
+  currentSong: Song | null;
+  isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+  isShuffle: boolean;
+  repeatMode: 'off' | 'all' | 'one';
+}
 
 class MusicService {
   private songs: Song[] = [];
   private currentSong: Song | null = null;
   private isPlaying: boolean = false;
+  private isShuffle: boolean = false;
+  private repeatMode: 'off' | 'all' | 'one' = 'all';
+  private offlineTrackIds: Set<string> = new Set();
   private listeners: ((songs: Song[]) => void)[] = [];
-  private playerListeners: ((state: { currentSong: Song | null; isPlaying: boolean; currentTime: number; duration: number }) => void)[] = [];
+  private playerListeners: ((state: PlayerState) => void)[] = [];
   
   // Web Audio Context & Synthesizer for real audible music playback
   private audioCtx: AudioContext | null = null;
@@ -20,6 +33,30 @@ class MusicService {
 
   constructor() {
     this.loadSongs();
+    this.loadOfflineTracks();
+  }
+
+  private loadOfflineTracks() {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(OFFLINE_AUDIO_KEY);
+        if (stored) {
+          this.offlineTrackIds = new Set(JSON.parse(stored));
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  private saveOfflineTracks() {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(OFFLINE_AUDIO_KEY, JSON.stringify(Array.from(this.offlineTrackIds)));
+      } catch {
+        // ignore
+      }
+    }
   }
 
   private loadSongs() {
@@ -244,11 +281,89 @@ class MusicService {
     this.notifyPlayer();
   }
 
+  public toggleShuffle(): boolean {
+    this.isShuffle = !this.isShuffle;
+    this.notifyPlayer();
+    return this.isShuffle;
+  }
+
+  public toggleRepeat(): 'off' | 'all' | 'one' {
+    if (this.repeatMode === 'off') this.repeatMode = 'all';
+    else if (this.repeatMode === 'all') this.repeatMode = 'one';
+    else this.repeatMode = 'off';
+    this.notifyPlayer();
+    return this.repeatMode;
+  }
+
+  public getShuffle(): boolean {
+    return this.isShuffle;
+  }
+
+  public getRepeatMode(): 'off' | 'all' | 'one' {
+    return this.repeatMode;
+  }
+
+  public isOfflineAvailable(songId: string): boolean {
+    return this.offlineTrackIds.has(songId);
+  }
+
+  public async saveTrackOffline(song: Song): Promise<boolean> {
+    if (!song.audioUrl) {
+      this.offlineTrackIds.add(song.id);
+      this.saveOfflineTracks();
+      this.notify();
+      return true;
+    }
+
+    try {
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        const cache = await caches.open('ray-offline-audio');
+        await cache.add(song.audioUrl);
+      }
+      this.offlineTrackIds.add(song.id);
+      this.saveOfflineTracks();
+      this.notify();
+      return true;
+    } catch (err) {
+      console.warn('[MusicService] Failed to cache audio offline:', err);
+      return false;
+    }
+  }
+
   public playNext() {
     if (!this.currentSong || this.songs.length === 0) return;
+
+    if (this.repeatMode === 'one') {
+      this.currentTime = 0;
+      if (this.audioElement) {
+        this.audioElement.currentTime = 0;
+        this.audioElement.play().catch(() => {});
+      }
+      this.notifyPlayer();
+      return;
+    }
+
     const currentIndex = this.songs.findIndex(s => s.id === this.currentSong?.id);
-    const nextIndex = (currentIndex + 1) % this.songs.length;
-    this.playSong(this.songs[nextIndex]);
+
+    if (this.isShuffle && this.songs.length > 1) {
+      let randomIndex = currentIndex;
+      while (randomIndex === currentIndex) {
+        randomIndex = Math.floor(Math.random() * this.songs.length);
+      }
+      this.playSong(this.songs[randomIndex]);
+      return;
+    }
+
+    const nextIndex = currentIndex + 1;
+    if (nextIndex >= this.songs.length) {
+      if (this.repeatMode === 'off') {
+        this.closePlayer();
+        return;
+      }
+      this.playSong(this.songs[0]);
+    } else {
+      this.playSong(this.songs[nextIndex]);
+    }
   }
 
   public playPrevious() {
@@ -299,13 +414,15 @@ class MusicService {
     };
   }
 
-  public subscribePlayer(listener: (state: { currentSong: Song | null; isPlaying: boolean; currentTime: number; duration: number }) => void) {
+  public subscribePlayer(listener: (state: PlayerState) => void) {
     this.playerListeners.push(listener);
     listener({ 
       currentSong: this.currentSong, 
       isPlaying: this.isPlaying, 
       currentTime: this.currentTime,
-      duration: this.currentSong?.duration || 180
+      duration: this.currentSong?.duration || 180,
+      isShuffle: this.isShuffle,
+      repeatMode: this.repeatMode,
     });
     return () => {
       this.playerListeners = this.playerListeners.filter(l => l !== listener);
@@ -322,7 +439,9 @@ class MusicService {
       currentSong: this.currentSong, 
       isPlaying: this.isPlaying,
       currentTime: this.currentTime,
-      duration: dur
+      duration: dur,
+      isShuffle: this.isShuffle,
+      repeatMode: this.repeatMode,
     }));
   }
 }

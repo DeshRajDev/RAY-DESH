@@ -49,3 +49,4 @@ backend/uploads/*
 !backend/uploads/.gitkeep
 backend/data/
 data/
+backend/songs/

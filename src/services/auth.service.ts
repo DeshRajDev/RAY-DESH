@@ -1,5 +1,6 @@
 import { User, ApiResponse } from '@/types';
 import { currentUser, partnerUser } from '@/constants/initial-data';
+import { ApiClient } from './api/client';
 
 export interface AuthCredentials {
   identifier: string; // Phone number or Email
@@ -155,6 +156,23 @@ class AuthService {
       localStorage.setItem(STORAGE_KEY, targetUserId);
     }
 
+    // Connect to backend API if available to obtain and persist JWT token
+    try {
+      const api = ApiClient.getInstance();
+      api.post<{ data?: { accessToken?: string } }>('/auth/login', {
+        identifier,
+        password,
+      }).then(res => {
+        if (res && res.data?.accessToken) {
+          api.setToken(res.data.accessToken);
+        }
+      }).catch(() => {
+        // Fallback to local session
+      });
+    } catch {
+      // ignore
+    }
+
     this.notify();
     return { success: true, data: this.getCurrentUser() };
   }
@@ -186,6 +204,11 @@ class AuthService {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(SESSION_KEY);
       localStorage.removeItem(STORAGE_KEY);
+      try {
+        ApiClient.getInstance().setToken(null);
+      } catch {
+        // ignore
+      }
     }
     this.notify();
   }

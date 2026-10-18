@@ -22,12 +22,23 @@ import {
 import { useApp } from '@/stores/app-context';
 import { RelationshipTimer } from '@/components/ui/relationship-timer';
 import { Skiper6, Skiper6Item } from '@/components/ui/skiper6';
-import { initialMemories, initialMessages, initialStories, initialSongs, initialDates, initialBucketList, initialLetters } from '@/constants/initial-data';
+import { initialMemories, initialMessages, initialDates, initialBucketList, initialSongs, initialLetters } from '@/constants/initial-data';
 import { daysUntil, formatDate, getTimeOfDayGreeting, TimeOfDayGreeting } from '@/lib/date-utils';
+import { chatService } from '@/services/chat.service';
+import { memoryService } from '@/services/memory.service';
+import { bucketListService } from '@/services/bucketList.service';
+import { dateService } from '@/services/date.service';
+import { musicService } from '@/services/music.service';
+import { Memory, Message, DateEvent, BucketListItem, Song } from '@/types';
 
 export default function DashboardPage() {
   const { user, partner, couple, openMediaViewer, playSong, triggerHeartEffect } = useApp();
   const [timeGreeting, setTimeGreeting] = useState<TimeOfDayGreeting>(() => getTimeOfDayGreeting());
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const [dates, setDates] = useState<DateEvent[]>([]);
+  const [bucketList, setBucketList] = useState<BucketListItem[]>([]);
+  const [songs, setSongs] = useState<Song[]>([]);
 
   useEffect(() => {
     const update = () => {
@@ -35,18 +46,40 @@ export default function DashboardPage() {
     };
     update();
     const interval = setInterval(update, 30000);
-    return () => clearInterval(interval);
+
+    chatService.getMessages().then(res => setMessages(res.data ?? []));
+    memoryService.getMemories().then(res => setMemories(res.data ?? []));
+    dateService.getDates().then(res => setDates(res.data ?? []));
+    bucketListService.getItems().then(res => setBucketList(res.data ?? []));
+    musicService.getSongs().then(res => setSongs(res.data ?? []));
+
+    const unsubChat = chatService.subscribe(setMessages);
+    const unsubMemories = memoryService.subscribe(setMemories);
+    const unsubDates = dateService.subscribe(setDates);
+    const unsubBucket = bucketListService.subscribe(setBucketList);
+    const unsubSongs = musicService.subscribe(setSongs);
+
+    return () => {
+      clearInterval(interval);
+      unsubChat();
+      unsubMemories();
+      unsubDates();
+      unsubBucket();
+      unsubSongs();
+    };
   }, []);
 
-  const latestMessage = initialMessages[initialMessages.length - 1];
-  const nextDate = initialDates[0];
-  const nextBirthday = initialDates[1];
-  const completedBucketCount = initialBucketList.filter(b => b.isCompleted).length;
-  const recentSong = initialSongs[0];
-  const heroMemory = initialMemories[0];
+  const latestMessage = messages.length > 0 ? messages[messages.length - 1] : initialMessages[initialMessages.length - 1];
+  const nextDate = dates[0] || initialDates[0];
+  const nextBirthday = dates[1] || initialDates[1];
+  const totalBucket = bucketList.length > 0 ? bucketList.length : initialBucketList.length;
+  const completedBucketCount = bucketList.length > 0 ? bucketList.filter(b => b.isCompleted).length : initialBucketList.filter(b => b.isCompleted).length;
+  const nextGoal = bucketList.find(b => !b.isCompleted)?.title || initialBucketList.find(b => !b.isCompleted)?.title;
+  const recentSong = songs[0] || initialSongs[0];
+  const activeMemories = memories.length > 0 ? memories : initialMemories;
 
   // Convert memories into Skiper6 carousel items
-  const carouselItems: Skiper6Item[] = initialMemories.map(m => ({
+  const carouselItems: Skiper6Item[] = activeMemories.slice(0, 8).map(m => ({
     id: m.id,
     title: m.title,
     subtitle: m.location,
@@ -226,7 +259,7 @@ export default function DashboardPage() {
                 <span className="text-xs font-mono uppercase tracking-wider text-[#777777]">Bucket List</span>
               </div>
               <span className="text-xs font-mono text-white">
-                {completedBucketCount} / {initialBucketList.length} Done
+                {completedBucketCount} / {totalBucket} Done
               </span>
             </div>
 
@@ -234,12 +267,12 @@ export default function DashboardPage() {
             <div className="w-full bg-[#1A1A1A] h-2 rounded-full overflow-hidden mb-4">
               <div
                 className="bg-white h-full rounded-full transition-all duration-500"
-                style={{ width: `${(completedBucketCount / initialBucketList.length) * 100}%` }}
+                style={{ width: `${(completedBucketCount / Math.max(totalBucket, 1)) * 100}%` }}
               />
             </div>
 
             <p className="text-xs text-[#AAAAAA] font-light line-clamp-2">
-              Next Goal: {initialBucketList.find(b => !b.isCompleted)?.title}
+              Next Goal: {nextGoal || 'Add a new couple goal in the bucket list'}
             </p>
           </div>
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Music, Play, Pause, Heart, Disc, Volume2, Sparkles, Clock, User, ArrowRight } from 'lucide-react';
+import { Plus, Music, Play, Pause, Heart, Disc, Volume2, Sparkles, Clock, User, ArrowRight, Shuffle, Repeat, Repeat1, Download, CheckCircle2 } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
 import { Song } from '@/types';
 import { musicService } from '@/services/music.service';
@@ -137,6 +137,33 @@ export default function MusicPage() {
                 &ldquo;{currentSong.note}&rdquo;
               </p>
             )}
+
+            {/* Quick Playback Mode Buttons */}
+            <div className="flex items-center justify-center md:justify-start gap-2 pt-2">
+              <button
+                onClick={() => musicService.toggleShuffle()}
+                className={`clay-pill text-xs flex items-center gap-1.5 ${
+                  musicService.getShuffle() ? 'active text-black' : 'text-[#888888] hover:text-white'
+                }`}
+              >
+                <Shuffle className="h-3 w-3" />
+                <span>Shuffle {musicService.getShuffle() ? 'On' : 'Off'}</span>
+              </button>
+
+              <button
+                onClick={() => musicService.toggleRepeat()}
+                className={`clay-pill text-xs flex items-center gap-1.5 ${
+                  musicService.getRepeatMode() !== 'off' ? 'active text-black' : 'text-[#888888] hover:text-white'
+                }`}
+              >
+                {musicService.getRepeatMode() === 'one' ? (
+                  <Repeat1 className="h-3 w-3" />
+                ) : (
+                  <Repeat className="h-3 w-3" />
+                )}
+                <span>Repeat: {musicService.getRepeatMode()}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -159,6 +186,7 @@ export default function MusicPage() {
         <div className="space-y-1">
           {songs.map((song, index) => {
             const isThisPlaying = currentSong?.id === song.id && isPlaying;
+            const isOffline = musicService.isOfflineAvailable(song.id);
 
             return (
               <div
@@ -196,7 +224,25 @@ export default function MusicPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 shrink-0">
+                <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      await musicService.saveTrackOffline(song);
+                      triggerHeartEffect(e.clientX, e.clientY);
+                    }}
+                    title={isOffline ? 'Cached for offline playback' : 'Download for offline playback'}
+                    className={`p-1.5 rounded-full transition-colors ${
+                      isOffline ? 'text-white/90 bg-white/10' : 'text-[#555555] hover:text-[#AAAAAA]'
+                    }`}
+                  >
+                    {isOffline ? (
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+
                   <span className="hidden sm:inline text-xs font-mono text-[#666666]">
                     {song.category}
                   </span>

@@ -53,6 +53,16 @@ class ChatService {
               this.messages.push(data);
               this.saveMessages();
               this.notifyListeners();
+
+              if (this.currentActiveUserId && data.receiverId === this.currentActiveUserId) {
+                notificationService.addNotification({
+                  type: 'message_reaction',
+                  title: `New message from ${data.senderId === 'user_1' ? 'Desh' : 'Rey'}`,
+                  description: data.content || 'Sent an attachment',
+                  linkUrl: '/chat',
+                  actionText: 'Reply in Chat',
+                });
+              }
             }
           } else if (type === 'UPDATE_MESSAGES') {
             this.messages = data;
