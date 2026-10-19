@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, MessageCircle, Camera, Music, Calendar, CheckSquare, Compass, BookHeart, Mail, Sparkles, Film, X } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
-import { initialMemories, initialMessages, initialSongs, initialDates, initialBucketList, initialPlaces, initialReels } from '@/constants/initial-data';
+import { ApiClient } from '@/services/api/client';
 
 export function CommandPalette() {
   const router = useRouter();
   const { isCommandPaletteOpen, setIsCommandPaletteOpen } = useCommandContextSafe();
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{ type: string; title: string; subtitle?: string; href: string; icon: any }[]>([]);
 
   // Close with Esc
   useEffect(() => {
@@ -22,6 +23,58 @@ export function CommandPalette() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isCommandPaletteOpen, setIsCommandPaletteOpen]);
+
+  useEffect(() => {
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await ApiClient.get<{
+          success: boolean;
+          data: {
+            messages: any[];
+            memories: any[];
+            songs: any[];
+            journal: any[];
+            letters: any[];
+            bucketList: any[];
+          };
+        }>(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+
+        if (res && res.data) {
+          const matches: { type: string; title: string; subtitle?: string; href: string; icon: any }[] = [];
+
+          (res.data.memories || []).forEach((m: any) => {
+            matches.push({ type: 'Memory', title: m.title, subtitle: m.location, href: '/memories', icon: Camera });
+          });
+          (res.data.messages || []).forEach((msg: any) => {
+            matches.push({ type: 'Chat Message', title: msg.content, subtitle: msg.createdAt?.slice(0, 10), href: '/chat', icon: MessageCircle });
+          });
+          (res.data.songs || []).forEach((s: any) => {
+            matches.push({ type: 'Music', title: `${s.title} — ${s.artist}`, subtitle: s.category, href: '/music', icon: Music });
+          });
+          (res.data.letters || []).forEach((l: any) => {
+            matches.push({ type: 'Love Letter', title: l.occasion || l.title, subtitle: `From ${l.authorName}`, href: '/letters', icon: Mail });
+          });
+          (res.data.bucketList || []).forEach((b: any) => {
+            matches.push({ type: 'Bucket List', title: b.title, subtitle: b.category, href: '/bucket-list', icon: CheckSquare });
+          });
+          (res.data.journal || []).forEach((j: any) => {
+            matches.push({ type: 'Journal', title: j.title, subtitle: j.mood, href: '/journal', icon: BookHeart });
+          });
+
+          setSearchResults(matches.slice(0, 10));
+        }
+      } catch {
+        setSearchResults([]);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Search filtered results
   const results = useMemo(() => {
@@ -38,61 +91,8 @@ export function CommandPalette() {
         { type: 'Quick Navigation', title: 'Relationship Journal', href: '/journal', icon: BookHeart },
       ];
     }
-
-    const q = searchQuery.toLowerCase();
-    const matches: { type: string; title: string; subtitle?: string; href: string; icon: any }[] = [];
-
-    // Memories
-    initialMemories.forEach(m => {
-      if (m.title.toLowerCase().includes(q) || m.description.toLowerCase().includes(q) || m.tags.some(t => t.toLowerCase().includes(q))) {
-        matches.push({ type: 'Memory', title: m.title, subtitle: m.location, href: `/memories`, icon: Camera });
-      }
-    });
-
-    // Messages
-    initialMessages.forEach(msg => {
-      if (msg.content.toLowerCase().includes(q)) {
-        matches.push({ type: 'Chat Message', title: msg.content, subtitle: msg.createdAt.slice(0, 10), href: '/chat', icon: MessageCircle });
-      }
-    });
-
-    // Songs
-    initialSongs.forEach(s => {
-      if (s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q) || (s.lyricsSnippet && s.lyricsSnippet.toLowerCase().includes(q))) {
-        matches.push({ type: 'Music', title: `${s.title} — ${s.artist}`, subtitle: s.category, href: '/music', icon: Music });
-      }
-    });
-
-    // Dates
-    initialDates.forEach(d => {
-      if (d.title.toLowerCase().includes(q) || (d.description && d.description.toLowerCase().includes(q))) {
-        matches.push({ type: 'Date Event', title: d.title, subtitle: d.type, href: '/dates', icon: Calendar });
-      }
-    });
-
-    // Bucket list
-    initialBucketList.forEach(b => {
-      if (b.title.toLowerCase().includes(q) || (b.description && b.description.toLowerCase().includes(q))) {
-        matches.push({ type: 'Bucket List', title: b.title, subtitle: b.category, href: '/bucket-list', icon: CheckSquare });
-      }
-    });
-
-    // Places
-    initialPlaces.forEach(p => {
-      if (p.name.toLowerCase().includes(q) || p.city.toLowerCase().includes(q)) {
-        matches.push({ type: 'Place', title: `${p.name}, ${p.city}`, subtitle: p.category === 'Been' ? 'Visited' : 'Wishlist', href: '/places', icon: Compass });
-      }
-    });
-
-    // Reels
-    initialReels.forEach(r => {
-      if ((r.title && r.title.toLowerCase().includes(q)) || (r.caption && r.caption.toLowerCase().includes(q)) || r.category.toLowerCase().includes(q)) {
-        matches.push({ type: 'Reel Video', title: r.title || 'Saved Reel', subtitle: r.caption || r.category, href: '/reels', icon: Film });
-      }
-    });
-
-    return matches.slice(0, 10);
-  }, [searchQuery]);
+    return searchResults;
+  }, [searchQuery, searchResults]);
 
   const handleSelect = (href: string) => {
     setIsCommandPaletteOpen(false);

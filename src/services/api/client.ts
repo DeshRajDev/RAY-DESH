@@ -35,6 +35,26 @@ export class ApiClient {
     return ApiClient.instance;
   }
 
+  public static get<T>(endpoint: string, options?: RequestOptions): Promise<T> {
+    return ApiClient.getInstance().get<T>(endpoint, options);
+  }
+
+  public static post<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<T> {
+    return ApiClient.getInstance().post<T>(endpoint, body, options);
+  }
+
+  public static put<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<T> {
+    return ApiClient.getInstance().put<T>(endpoint, body, options);
+  }
+
+  public static patch<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<T> {
+    return ApiClient.getInstance().patch<T>(endpoint, body, options);
+  }
+
+  public static delete<T>(endpoint: string, options?: RequestOptions): Promise<T> {
+    return ApiClient.getInstance().delete<T>(endpoint, options);
+  }
+
   public setToken(token: string | null) {
     this.token = token;
     if (typeof window !== 'undefined') {
@@ -46,6 +66,13 @@ export class ApiClient {
     }
   }
 
+  public getToken(): string | null {
+    if (!this.token && typeof window !== 'undefined') {
+      this.token = localStorage.getItem('couple_auth_token');
+    }
+    return this.token;
+  }
+
   public async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const { params, headers, ...customConfig } = options;
 
@@ -53,26 +80,36 @@ export class ApiClient {
     if (params) {
       const searchParams = new URLSearchParams();
       Object.entries(params).forEach(([key, value]) => {
-        searchParams.append(key, String(value));
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, String(value));
+        }
       });
-      url += `?${searchParams.toString()}`;
+      const qs = searchParams.toString();
+      if (qs) {
+        url += (url.includes('?') ? '&' : '?') + qs;
+      }
     }
 
+    const token = this.getToken();
     const defaultHeaders: HeadersInit = {
       'Content-Type': 'application/json',
-      ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     };
 
     try {
       const response = await fetch(url, {
+        credentials: 'include',
         ...customConfig,
         headers: defaultHeaders,
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Request failed with status ${response.status}`);
+        const err = new Error(errorData.message || `Request failed with status ${response.status}`);
+        (err as any).status = response.status;
+        (err as any).data = errorData;
+        throw err;
       }
 
       return await response.json();

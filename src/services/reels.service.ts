@@ -19,16 +19,14 @@ class ReelsService {
         const stored = localStorage.getItem(REELS_STORAGE_KEY);
         if (stored) {
           this.reels = JSON.parse(stored);
-        } else {
-          this.reels = [...initialReels];
-          this.saveToStorage();
+          this.isInitialized = true;
+          return;
         }
       } catch {
-        this.reels = [...initialReels];
+        // ignore
       }
-    } else {
-      this.reels = [...initialReels];
     }
+    this.reels = [];
     this.isInitialized = true;
   }
 
@@ -49,7 +47,7 @@ class ReelsService {
         params: category && category !== 'All' ? { category } : undefined,
       });
 
-      if (response && response.success && Array.isArray(response.data) && response.data.length > 0) {
+      if (response && response.success && Array.isArray(response.data)) {
         this.reels = response.data;
         this.saveToStorage();
         this.notify();

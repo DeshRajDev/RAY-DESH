@@ -34,6 +34,7 @@ import { Message, MessageAttachment } from '@/types';
 import { chatService, ChatWallpaper, UserPresence } from '@/services/chat.service';
 import { formatDate, formatTime } from '@/lib/date-utils';
 import { Modal } from '@/components/ui/modal';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const POPULAR_REACTIONS = ['❤️', '😂', '🥹', '😘', '😍', '😢', '🔥', '👍', '🎉'];
 
@@ -79,6 +80,7 @@ const WALLPAPER_PRESETS: { id: string; name: string; url: string; preview: strin
 export default function ChatPage() {
   const { user, partner, openMediaViewer, triggerHeartEffect } = useApp();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [inputText, setInputText] = useState('');
   const [replyMessage, setReplyMessage] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
@@ -138,7 +140,13 @@ export default function ChatPage() {
   }, [user.id, partner.id]);
 
   useEffect(() => {
-    chatService.getMessages().then(res => setMessages(res.data ?? []));
+    chatService.getMessages()
+      .then(res => {
+        setMessages(res.data ?? []);
+        setIsLoading(false);
+      })
+      .catch(() => setIsLoading(false));
+
     const unsubscribe = chatService.subscribe(updated => setMessages(updated));
     return () => unsubscribe();
   }, []);
@@ -403,8 +411,34 @@ export default function ChatPage() {
               </span>
             </div>
 
-            {filteredMessages.map((msg) => {
-              const isMe = msg.senderId === user.id;
+            {isLoading ? (
+              <div className="space-y-4 py-4">
+                <div className="flex flex-col items-start space-y-1 max-w-xs">
+                  <Skeleton className="h-10 w-48 rounded-2xl rounded-bl-sm" />
+                </div>
+                <div className="flex flex-col items-end space-y-1 ml-auto max-w-xs">
+                  <Skeleton className="h-12 w-56 rounded-2xl rounded-br-sm" />
+                </div>
+                <div className="flex flex-col items-start space-y-1 max-w-xs">
+                  <Skeleton className="h-16 w-64 rounded-2xl rounded-bl-sm" />
+                </div>
+                <div className="flex flex-col items-end space-y-1 ml-auto max-w-xs">
+                  <Skeleton className="h-10 w-40 rounded-2xl rounded-br-sm" />
+                </div>
+              </div>
+            ) : filteredMessages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
+                <div className="h-12 w-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <h4 className="font-serif text-base text-white">Our Private Sanctuary Chat</h4>
+                <p className="text-xs text-[#777777] max-w-xs font-light leading-relaxed">
+                  No messages yet. Send your first whisper to {partner.name} below.
+                </p>
+              </div>
+            ) : (
+              filteredMessages.map((msg) => {
+                const isMe = msg.senderId === user.id;
 
               return (
                 <motion.div
@@ -536,7 +570,7 @@ export default function ChatPage() {
                   </div>
                 </motion.div>
               );
-            })}
+            }))}
             <div ref={messagesEndRef} />
           </div>
         </div>

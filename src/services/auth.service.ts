@@ -126,55 +126,118 @@ class AuthService {
   }
 
   public async loginWithCredentials(identifier: string, password?: string): Promise<ApiResponse<User>> {
-    if (!password || password.trim() !== 'Love..') {
-      return {
-        success: false,
-        error: {
-          code: 'INVALID_CREDENTIALS',
-          message: 'Incorrect password. Please enter the valid sanctuary password.',
-        },
-      };
-    }
-
-    const account = this.identifyAccount(identifier);
-    if (!account) {
-      return {
-        success: false,
-        error: {
-          code: 'USER_NOT_FOUND',
-          message: 'Unrecognized phone number or email. Please enter Desh (8580962780) or Rey (9015006850).',
-        },
-      };
-    }
-
-    const targetUserId = ACCOUNTS[account].id;
-    this.activeUserId = targetUserId;
-    this.isSessionActive = true;
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(SESSION_KEY, 'true');
-      localStorage.setItem(STORAGE_KEY, targetUserId);
-    }
-
-    // Connect to backend API if available to obtain and persist JWT token
     try {
       const api = ApiClient.getInstance();
-      api.post<{ data?: { accessToken?: string } }>('/auth/login', {
-        identifier,
-        password,
-      }).then(res => {
-        if (res && res.data?.accessToken) {
-          api.setToken(res.data.accessToken);
-        }
-      }).catch(() => {
-        // Fallback to local session
+      const res = await api.post<{ success: boolean; data: { accessToken: string; refreshToken?: string; user: any; couple: any }; message?: string }>('/auth/login', {
+        identifier: identifier.trim(),
+        password: password || '',
       });
-    } catch {
-      // ignore
+
+      if (!res || !res.data || !res.data.accessToken) {
+        throw new Error(res?.message || 'Login failed from backend');
+      }
+
+      const { accessToken, user: backendUser, couple: backendCouple } = res.data;
+      api.setToken(accessToken);
+
+      this.isSessionActive = true;
+      const mappedRole = backendUser.role === 'partner1' ? 'user_1' : 'user_2';
+      this.activeUserId = mappedRole;
+
+      // Update in-memory user
+      const userObj: User = {
+        id: mappedRole,
+        name: backendUser.name,
+        nickname: backendUser.nickname || '',
+        email: backendUser.email,
+        phoneNumber: backendUser.phoneNumber,
+        avatar: backendUser.avatar || (mappedRole === 'user_1' ? currentUser.avatar : partnerUser.avatar),
+        bio: backendUser.bio || '',
+        birthday: backendUser.birthday,
+        favoriteSong: backendUser.favoriteSong,
+        favoritePlace: backendUser.favoritePlace,
+        favoriteQuote: backendUser.favoriteQuote,
+        favoriteColor: backendUser.favoriteColor,
+        statusMessage: backendUser.statusMessage,
+        isOnline: true,
+        role: backendUser.role,
+      };
+
+      this.users[mappedRole] = userObj;
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(SESSION_KEY, 'true');
+        localStorage.setItem(STORAGE_KEY, mappedRole);
+        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(this.users));
+        if (backendCouple) {
+          localStorage.setItem('sanctuary_couple_settings_v2', JSON.stringify({
+            id: backendCouple.id || backendCouple._id,
+            partner1: mappedRole === 'user_1' ? userObj : this.getPartnerUser(),
+            partner2: mappedRole === 'user_2' ? userObj : this.getPartnerUser(),
+            anniversaryDate: backendCouple.anniversaryDate,
+            relationshipStartDate: backendCouple.relationshipStartDate,
+            customTitle: backendCouple.customTitle || 'Ray — किरण',
+            theme: backendCouple.theme || 'dark',
+            coupleAvatar: backendCouple.coupleAvatar,
+            soundEnabled: backendCouple.soundEnabled ?? true,
+            privacyPinEnabled: backendCouple.privacyPinEnabled ?? false,
+          }));
+        }
+      }
+
+      this.notify();
+      return { success: true, data: userObj };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Invalid phone number/email or password.';
+      return {
+        success: false,
+        error: {
+          code: 'LOGIN_FAILED',
+          message: msg,
+        },
+      };
+    }
+  }
+
+  public async verifySession(): Promise<boolean> {
+    const api = ApiClient.getInstance();
+    const token = api.getToken();
+    if (!token) {
+      this.isSessionActive = false;
+      return false;
     }
 
-    this.notify();
-    return { success: true, data: this.getCurrentUser() };
+    try {
+      const res = await api.get<{ success: boolean; data: { user: any; couple: any } }>('/auth/me');
+      if (res && res.success && res.data?.user) {
+        const backendUser = res.data.user;
+        const mappedRole = backendUser.role === 'partner1' ? 'user_1' : 'user_2';
+        this.activeUserId = mappedRole;
+        this.isSessionActive = true;
+        this.users[mappedRole] = {
+          ...this.users[mappedRole],
+          name: backendUser.name,
+          email: backendUser.email,
+          phoneNumber: backendUser.phoneNumber,
+          avatar: backendUser.avatar,
+          bio: backendUser.bio,
+          birthday: backendUser.birthday,
+          favoriteSong: backendUser.favoriteSong,
+          favoritePlace: backendUser.favoritePlace,
+          favoriteQuote: backendUser.favoriteQuote,
+          favoriteColor: backendUser.favoriteColor,
+          statusMessage: backendUser.statusMessage,
+          isOnline: true,
+          role: backendUser.role,
+        };
+        this.notify();
+        return true;
+      }
+    } catch {
+      this.logout();
+      return false;
+    }
+    return false;
   }
 
   public async switchUser(userId: 'user_1' | 'user_2'): Promise<User> {
@@ -193,6 +256,11 @@ class AuthService {
       if (typeof window !== 'undefined') {
         localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(this.users));
       }
+      try {
+        await ApiClient.getInstance().patch('/users/profile', updates);
+      } catch (err) {
+        console.warn('Profile update backend sync error:', err);
+      }
       this.notify();
       return this.users[key];
     }
@@ -200,6 +268,11 @@ class AuthService {
   }
 
   public logout(): void {
+    try {
+      ApiClient.getInstance().post('/auth/logout').catch(() => {});
+    } catch {
+      // ignore
+    }
     this.isSessionActive = false;
     if (typeof window !== 'undefined') {
       localStorage.removeItem(SESSION_KEY);

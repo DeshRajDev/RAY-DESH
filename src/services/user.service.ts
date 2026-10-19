@@ -1,6 +1,7 @@
 import { User, Couple, ApiResponse } from '@/types';
 import { initialCouple } from '@/constants/initial-data';
 import { authService } from './auth.service';
+import { ApiClient } from './api/client';
 
 const COUPLE_STORAGE_KEY = 'sanctuary_couple_settings_v2';
 
@@ -27,6 +28,32 @@ class UserService {
 
   public async getCoupleProfile(): Promise<ApiResponse<Couple>> {
     const { me, partner } = authService.getAllUsers();
+    try {
+      if (typeof window !== 'undefined') {
+        const res = await ApiClient.getInstance().get<{ success: boolean; data: any }>('/couples');
+        if (res && res.success && res.data) {
+          const c = res.data;
+          this.couple = {
+            id: c.id || c._id || this.couple.id,
+            partner1: me.id === 'user_1' ? me : partner,
+            partner2: me.id === 'user_2' ? me : partner,
+            anniversaryDate: c.anniversaryDate || this.couple.anniversaryDate,
+            relationshipStartDate: c.relationshipStartDate || this.couple.relationshipStartDate,
+            customTitle: c.customTitle || 'Ray — किरण',
+            theme: c.theme || 'dark',
+            coupleAvatar: c.coupleAvatar || this.couple.coupleAvatar,
+            soundEnabled: c.soundEnabled ?? true,
+            privacyPinEnabled: c.privacyPinEnabled ?? false,
+          };
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(COUPLE_STORAGE_KEY, JSON.stringify(this.couple));
+          }
+        }
+      }
+    } catch {
+      // Fallback to local
+    }
+
     return {
       success: true,
       data: {
@@ -52,6 +79,13 @@ class UserService {
         // ignore
       }
     }
+
+    try {
+      await ApiClient.getInstance().patch('/couples/settings', updates);
+    } catch (err) {
+      console.warn('Couple settings backend sync error:', err);
+    }
+
     this.notify();
     return { success: true, data: { ...this.couple } };
   }

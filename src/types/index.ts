@@ -288,17 +288,21 @@ export interface Trip {
   id: ID;
   title: string;
   destination: string;
-  country: string;
+  country?: string;
   startDate: string;
   endDate: string;
-  coverPhoto: string;
-  locations: TripLocation[];
-  photos: string[];
+  coverPhoto?: string;
+  coverUrl?: string;
+  locations?: TripLocation[];
+  photos?: string[];
   videos?: string[];
   notes?: string;
-  status: 'planning' | 'ongoing' | 'completed';
+  status: 'planning' | 'ongoing' | 'completed' | 'planned';
   expenses?: TripExpense[];
   highlightMemoryId?: ID;
+  itinerary?: any[];
+  packingList?: any[];
+  memoriesCount?: number;
   createdAt: string;
 }
 
@@ -312,9 +316,10 @@ export interface Place {
   photos: string[];
   notes?: string;
   dateVisited?: string;
+  visitedDate?: string;
   isFavorite: boolean;
   rating?: number;
-  addedById: ID;
+  addedById?: ID;
 }
 
 export type JournalMood = 'joyful' | 'loved' | 'peaceful' | 'thoughtful' | 'nostalgic' | 'silly' | 'grateful' | 'excited';
@@ -322,12 +327,15 @@ export type JournalMood = 'joyful' | 'loved' | 'peaceful' | 'thoughtful' | 'nost
 export interface JournalEntry {
   id: ID;
   authorId: ID;
+  authorName?: string;
   title: string;
   content: string;
   date: string;
-  mood: JournalMood;
+  mood: JournalMood | string;
+  weather?: string;
   location?: string;
   photos?: string[];
+  isPrivate?: boolean;
   musicTrack?: string;
   isFavorite?: boolean;
   partnerRead?: boolean;

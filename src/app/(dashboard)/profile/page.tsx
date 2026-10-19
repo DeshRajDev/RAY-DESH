@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   User as UserIcon, 
@@ -20,14 +20,25 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
 import { formatDate } from '@/lib/date-utils';
-import { initialMemories, initialSongs, initialBucketList } from '@/constants/initial-data';
+import { memoryService } from '@/services/memory.service';
+import { musicService } from '@/services/music.service';
+import { bucketListService } from '@/services/bucketList.service';
 import { Modal } from '@/components/ui/modal';
 
 export default function ProfilePage() {
   const { user, partner, couple, logout, updateUserProfile, triggerHeartEffect } = useApp();
   const [activeProfileTab, setActiveProfileTab] = useState<'me' | 'partner'>('me');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [memoriesCount, setMemoriesCount] = useState<number>(0);
+  const [songsCount, setSongsCount] = useState<number>(0);
+  const [bucketDone, setBucketDone] = useState<number>(0);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    memoryService.getMemories().then(res => setMemoriesCount(res.data?.length ?? 0));
+    musicService.getSongs().then(res => setSongsCount(res.data?.length ?? 0));
+    bucketListService.getItems().then(res => setBucketDone(res.data?.filter(b => b.isCompleted).length ?? 0));
+  }, []);
 
   const currentViewUser = activeProfileTab === 'me' ? user : partner;
 
@@ -82,10 +93,6 @@ export default function ProfilePage() {
     });
     setIsEditModalOpen(false);
   };
-
-  const memoriesCount = initialMemories.length;
-  const songsCount = initialSongs.length;
-  const bucketDone = initialBucketList.filter(b => b.isCompleted).length;
 
   return (
     <div className="mx-auto max-w-4xl px-4 sm:px-8 py-6 space-y-8">

@@ -78,7 +78,7 @@ export default function TripDetailPage() {
           <h3 className="font-serif text-xl text-white font-normal">Visited &amp; Planned Stops</h3>
 
           <div className="space-y-3">
-            {trip.locations.map((loc, idx) => (
+            {(trip.locations || []).map((loc, idx) => (
               <div
                 key={loc.id}
                 className="clay-card p-5 rounded-2xl border border-white/10 bg-[#0F0F0F] flex items-start gap-4"
@@ -113,7 +113,7 @@ export default function TripDetailPage() {
                     key={i}
                     src={photo}
                     alt="Trip photo"
-                    onClick={() => openMediaViewer(trip.photos, i, { title: trip.title })}
+                    onClick={() => openMediaViewer(trip.photos || [], i, { title: trip.title })}
                     className="h-44 w-full rounded-2xl object-cover grayscale hover:grayscale-0 cursor-pointer border border-white/10 transition-all duration-300"
                   />
                 ))}
@@ -131,7 +131,7 @@ export default function TripDetailPage() {
 
           <div className="pt-4 border-t border-white/5 space-y-2 text-xs font-mono text-[#666666]">
             <div>Status: <span className="text-white capitalize">{trip.status}</span></div>
-            <div>Stops: <span className="text-white">{trip.locations.length} locations</span></div>
+            <div>Stops: <span className="text-white">{(trip.locations || []).length} locations</span></div>
           </div>
         </div>
       </div>

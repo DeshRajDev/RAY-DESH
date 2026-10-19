@@ -1,8 +1,9 @@
 import { Story, ApiResponse } from '@/types';
 import { initialStories } from '@/constants/initial-data';
+import { ApiClient } from './api/client';
 
-const STORIES_STORAGE_KEY = 'sanctuary_stories_v2';
-const STORIES_ARCHIVE_STORAGE_KEY = 'sanctuary_stories_archive_v2';
+const STORIES_STORAGE_KEY = 'sanctuary_stories_v3';
+const STORIES_ARCHIVE_STORAGE_KEY = 'sanctuary_stories_archive_v3';
 
 class StoryService {
   private stories: Story[] = [];
@@ -51,6 +52,34 @@ class StoryService {
   }
 
   public async getStories(): Promise<ApiResponse<Story[]>> {
+    try {
+      if (typeof window !== 'undefined') {
+        const res = await ApiClient.getInstance().get<{ success: boolean; data: any[] }>('/stories');
+        if (res && res.success && Array.isArray(res.data)) {
+          const formatted: Story[] = res.data.map(item => ({
+            id: item.id || item._id,
+            authorId: item.authorId,
+            type: item.type || 'image',
+            mediaUrl: item.mediaUrl,
+            text: item.text,
+            backgroundColor: item.backgroundColor,
+            songTitle: item.songTitle,
+            songArtist: item.songArtist,
+            caption: item.caption,
+            expiresAt: item.expiresAt,
+            reactions: item.reactions || [],
+            replies: item.replies || [],
+            isArchived: !!item.isArchived,
+            createdAt: item.createdAt || new Date().toISOString(),
+          }));
+          this.stories = formatted;
+          this.saveStories();
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
     return { success: true, data: [...this.stories] };
   }
 
@@ -59,33 +88,64 @@ class StoryService {
   }
 
   public async createStory(payload: Omit<Story, 'id' | 'createdAt' | 'expiresAt' | 'reactions' | 'replies'>): Promise<ApiResponse<Story>> {
-    const now = new Date();
-    const expires = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const newStory: Story = {
-      ...payload,
-      id: `story_${Date.now()}`,
-      createdAt: now.toISOString(),
-      expiresAt: expires.toISOString(),
-      reactions: [],
-      replies: [],
-      isArchived: false,
-    };
+    let createdStory: Story;
+    try {
+      const res = await ApiClient.getInstance().post<{ success: boolean; data: any }>('/stories', payload);
+      if (res && res.success && res.data) {
+        const item = res.data;
+        createdStory = {
+          id: item.id || item._id,
+          authorId: item.authorId,
+          type: item.type || 'image',
+          mediaUrl: item.mediaUrl,
+          text: item.text,
+          backgroundColor: item.backgroundColor,
+          songTitle: item.songTitle,
+          songArtist: item.songArtist,
+          caption: item.caption,
+          expiresAt: item.expiresAt,
+          reactions: [],
+          replies: [],
+          isArchived: false,
+          createdAt: item.createdAt || new Date().toISOString(),
+        };
+      } else {
+        throw new Error('Failed to create story');
+      }
+    } catch {
+      const now = new Date();
+      const expires = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      createdStory = {
+        ...payload,
+        id: `story_${Date.now()}`,
+        createdAt: now.toISOString(),
+        expiresAt: expires.toISOString(),
+        reactions: [],
+        replies: [],
+        isArchived: false,
+      };
+    }
     
     // Add to active stories
-    this.stories.unshift(newStory);
-    
-    // Also preserve in permanent Story Archive vault forever!
-    this.archivedStories.unshift({ ...newStory, isArchived: true });
+    this.stories.unshift(createdStory);
+    this.archivedStories.unshift({ ...createdStory, isArchived: true });
 
     this.saveStories();
     this.notify();
-    return { success: true, data: newStory };
+    return { success: true, data: createdStory };
   }
 
   public async reactToStory(storyId: string, emoji: string, userId: string): Promise<ApiResponse<Story>> {
     const story = this.stories.find(s => s.id === storyId) || this.archivedStories.find(s => s.id === storyId);
     if (!story) throw new Error('Story not found');
     story.reactions.push({ emoji, userId });
+
+    try {
+      await ApiClient.getInstance().post(`/stories/${storyId}/react`, { emoji });
+    } catch (err) {
+      console.warn('Story reaction sync error:', err);
+    }
+
     this.saveStories();
     this.notify();
     return { success: true, data: { ...story } };

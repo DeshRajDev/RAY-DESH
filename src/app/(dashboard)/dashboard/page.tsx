@@ -22,14 +22,15 @@ import {
 import { useApp } from '@/stores/app-context';
 import { RelationshipTimer } from '@/components/ui/relationship-timer';
 import { Skiper6, Skiper6Item } from '@/components/ui/skiper6';
-import { initialMemories, initialMessages, initialDates, initialBucketList, initialSongs, initialLetters } from '@/constants/initial-data';
+import { Skeleton } from '@/components/ui/skeleton';
 import { daysUntil, formatDate, getTimeOfDayGreeting, TimeOfDayGreeting } from '@/lib/date-utils';
 import { chatService } from '@/services/chat.service';
 import { memoryService } from '@/services/memory.service';
 import { bucketListService } from '@/services/bucketList.service';
 import { dateService } from '@/services/date.service';
 import { musicService } from '@/services/music.service';
-import { Memory, Message, DateEvent, BucketListItem, Song } from '@/types';
+import { letterService } from '@/services/letter.service';
+import { Memory, Message, DateEvent, BucketListItem, Song, LoveLetter } from '@/types';
 
 export default function DashboardPage() {
   const { user, partner, couple, openMediaViewer, playSong, triggerHeartEffect } = useApp();
@@ -39,6 +40,8 @@ export default function DashboardPage() {
   const [dates, setDates] = useState<DateEvent[]>([]);
   const [bucketList, setBucketList] = useState<BucketListItem[]>([]);
   const [songs, setSongs] = useState<Song[]>([]);
+  const [letters, setLetters] = useState<LoveLetter[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const update = () => {
@@ -47,17 +50,23 @@ export default function DashboardPage() {
     update();
     const interval = setInterval(update, 30000);
 
-    chatService.getMessages().then(res => setMessages(res.data ?? []));
-    memoryService.getMemories().then(res => setMemories(res.data ?? []));
-    dateService.getDates().then(res => setDates(res.data ?? []));
-    bucketListService.getItems().then(res => setBucketList(res.data ?? []));
-    musicService.getSongs().then(res => setSongs(res.data ?? []));
+    Promise.allSettled([
+      chatService.getMessages().then(res => setMessages(res.data ?? [])),
+      memoryService.getMemories().then(res => setMemories(res.data ?? [])),
+      dateService.getDates().then(res => setDates(res.data ?? [])),
+      bucketListService.getItems().then(res => setBucketList(res.data ?? [])),
+      musicService.getSongs().then(res => setSongs(res.data ?? [])),
+      letterService.getLetters().then(res => setLetters(res.data ?? [])),
+    ]).finally(() => {
+      setIsLoading(false);
+    });
 
     const unsubChat = chatService.subscribe(setMessages);
     const unsubMemories = memoryService.subscribe(setMemories);
     const unsubDates = dateService.subscribe(setDates);
     const unsubBucket = bucketListService.subscribe(setBucketList);
     const unsubSongs = musicService.subscribe(setSongs);
+    const unsubLetters = letterService.subscribe(setLetters);
 
     return () => {
       clearInterval(interval);
@@ -66,17 +75,19 @@ export default function DashboardPage() {
       unsubDates();
       unsubBucket();
       unsubSongs();
+      unsubLetters();
     };
   }, []);
 
-  const latestMessage = messages.length > 0 ? messages[messages.length - 1] : initialMessages[initialMessages.length - 1];
-  const nextDate = dates[0] || initialDates[0];
-  const nextBirthday = dates[1] || initialDates[1];
-  const totalBucket = bucketList.length > 0 ? bucketList.length : initialBucketList.length;
-  const completedBucketCount = bucketList.length > 0 ? bucketList.filter(b => b.isCompleted).length : initialBucketList.filter(b => b.isCompleted).length;
-  const nextGoal = bucketList.find(b => !b.isCompleted)?.title || initialBucketList.find(b => !b.isCompleted)?.title;
-  const recentSong = songs[0] || initialSongs[0];
-  const activeMemories = memories.length > 0 ? memories : initialMemories;
+  const latestMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+  const nextDate = dates.length > 0 ? dates[0] : null;
+  const nextBirthday = partner.birthday ? { date: partner.birthday, title: `${partner.name}'s Birthday` } : null;
+  const totalBucket = bucketList.length;
+  const completedBucketCount = bucketList.filter(b => b.isCompleted).length;
+  const nextGoal = bucketList.find(b => !b.isCompleted)?.title || null;
+  const recentSong = songs.length > 0 ? songs[0] : null;
+  const latestLetter = letters.length > 0 ? letters[0] : null;
+  const activeMemories = memories;
 
   // Convert memories into Skiper6 carousel items
   const carouselItems: Skiper6Item[] = activeMemories.slice(0, 8).map(m => ({
@@ -161,9 +172,15 @@ export default function DashboardPage() {
             <h2 className="font-serif text-2xl sm:text-3xl text-white font-light leading-snug">
               &ldquo;Every single ordinary second with you turns into an extraordinary memory.&rdquo;
             </h2>
-            <p className="text-xs sm:text-sm text-[#777777] font-light">
-              {daysUntil(nextDate.date, true)} days until <span className="text-[#CCCCCC]">{nextDate.title}</span>
-            </p>
+            {nextDate ? (
+              <p className="text-xs sm:text-sm text-[#777777] font-light">
+                {daysUntil(nextDate.date, true)} days until <span className="text-[#CCCCCC]">{nextDate.title}</span>
+              </p>
+            ) : (
+              <p className="text-xs sm:text-sm text-[#777777] font-light">
+                A peaceful moment together in our private sanctuary
+              </p>
+            )}
           </div>
 
           <div className="flex items-center justify-between pt-4 border-t border-white/5">
@@ -172,7 +189,7 @@ export default function DashboardPage() {
               className="text-xs text-[#AAAAAA] hover:text-white flex items-center gap-1.5 transition-colors"
             >
               <Heart className="h-3.5 w-3.5 fill-white text-white" />
-              Send Rey a silent heartbeat
+              Send {partner.name} a silent heartbeat
             </button>
             <Link href="/journal" className="text-xs text-[#AAAAAA] hover:text-white flex items-center gap-1">
               Read Daily Journal <ArrowRight className="h-3 w-3" />
@@ -187,14 +204,16 @@ export default function DashboardPage() {
               <Cake className="h-4 w-4 text-white" />
               <span className="text-xs font-mono uppercase tracking-wider text-[#777777]">Next Birthday</span>
             </div>
-            <span className="text-[10px] font-mono bg-white/10 px-2 py-0.5 rounded-full text-[#E5E5E5]">
-              {new Date(partner.birthday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </span>
+            {partner.birthday && (
+              <span className="text-[10px] font-mono bg-white/10 px-2 py-0.5 rounded-full text-[#E5E5E5]">
+                {new Date(partner.birthday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </span>
+            )}
           </div>
 
           <div className="my-4">
             <div className="text-4xl font-serif text-white font-light">
-              {daysUntil(nextBirthday.date, true)}
+              {nextBirthday ? daysUntil(nextBirthday.date, true) : '—'}
             </div>
             <div className="text-xs uppercase font-mono tracking-widest text-[#777777] mt-1">
               Days Remaining for {partner.name}
@@ -215,7 +234,28 @@ export default function DashboardPage() {
 
       {/* 3. SKIPER 6 INTERACTIVE FEATURED MOMENTS CAROUSEL */}
       <section className="rounded-3xl border border-white/10 bg-[#0B0B0B] p-6 sm:p-8 shadow-md">
-        <Skiper6 items={carouselItems} />
+        {isLoading ? (
+          <div className="flex gap-4 overflow-hidden py-4">
+            {[1, 2, 3].map(i => (
+              <Skeleton key={i} className="h-64 w-60 rounded-3xl shrink-0" />
+            ))}
+          </div>
+        ) : carouselItems.length > 0 ? (
+          <Skiper6 items={carouselItems} />
+        ) : (
+          <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
+            <div className="h-12 w-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white">
+              <Camera className="h-5 w-5" />
+            </div>
+            <h3 className="font-serif text-lg text-white">Our Memory Vault</h3>
+            <p className="text-xs text-[#777777] max-w-sm mx-auto font-light leading-relaxed">
+              Preserve your first shared photo, date, or milestone to display here in your sanctuary carousel.
+            </p>
+            <Link href="/memories" className="clay-btn clay-btn-secondary px-4 py-2 text-xs">
+              Capture First Memory
+            </Link>
+          </div>
+        )}
       </section>
 
       {/* 4. MULTI-MODULE DASHBOARD TILES */}
@@ -228,17 +268,32 @@ export default function DashboardPage() {
                 <MessageCircle className="h-4 w-4 text-white" />
                 <span className="text-xs font-mono uppercase tracking-wider text-[#777777]">Latest Conversation</span>
               </div>
-              <span className="text-[10px] font-mono text-[#555555]">
-                {formatDate(latestMessage.createdAt, 'relative')}
-              </span>
+              {latestMessage && (
+                <span className="text-[10px] font-mono text-[#555555]">
+                  {formatDate(latestMessage.createdAt, 'relative')}
+                </span>
+              )}
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-[#141414] border border-white/5 space-y-1">
-              <span className="text-xs font-serif text-white">{partner.name}:</span>
-              <p className="text-xs text-[#AAAAAA] font-light line-clamp-2 leading-relaxed">
-                {latestMessage.content}
-              </p>
-            </div>
+            {isLoading ? (
+              <div className="space-y-2 p-2">
+                <Skeleton className="h-4 w-24 rounded-md" />
+                <Skeleton className="h-8 w-full rounded-md" />
+              </div>
+            ) : latestMessage ? (
+              <div className="p-3.5 rounded-2xl bg-[#141414] border border-white/5 space-y-1">
+                <span className="text-xs font-serif text-white">{partner.name}:</span>
+                <p className="text-xs text-[#AAAAAA] font-light line-clamp-2 leading-relaxed">
+                  {latestMessage.content}
+                </p>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-2xl bg-[#141414] border border-white/5">
+                <p className="text-xs text-[#777777] font-light">
+                  No messages yet. Send a whisper to {partner.name} in chat.
+                </p>
+              </div>
+            )}
           </div>
 
           <Link
@@ -263,17 +318,26 @@ export default function DashboardPage() {
               </span>
             </div>
 
-            {/* Visual Progress Bar */}
-            <div className="w-full bg-[#1A1A1A] h-2 rounded-full overflow-hidden mb-4">
-              <div
-                className="bg-white h-full rounded-full transition-all duration-500"
-                style={{ width: `${(completedBucketCount / Math.max(totalBucket, 1)) * 100}%` }}
-              />
-            </div>
+            {isLoading ? (
+              <div className="space-y-3 p-2">
+                <Skeleton className="h-2 w-full rounded-full" />
+                <Skeleton className="h-4 w-3/4 rounded-md" />
+              </div>
+            ) : (
+              <>
+                {/* Visual Progress Bar */}
+                <div className="w-full bg-[#1A1A1A] h-2 rounded-full overflow-hidden mb-4">
+                  <div
+                    className="bg-white h-full rounded-full transition-all duration-500"
+                    style={{ width: `${totalBucket > 0 ? (completedBucketCount / totalBucket) * 100 : 0}%` }}
+                  />
+                </div>
 
-            <p className="text-xs text-[#AAAAAA] font-light line-clamp-2">
-              Next Goal: {nextGoal || 'Add a new couple goal in the bucket list'}
-            </p>
+                <p className="text-xs text-[#AAAAAA] font-light line-clamp-2">
+                  Next Goal: {nextGoal || 'Add a new couple goal to our bucket list'}
+                </p>
+              </>
+            )}
           </div>
 
           <Link
@@ -293,32 +357,52 @@ export default function DashboardPage() {
                 <Music className="h-4 w-4 text-white" />
                 <span className="text-xs font-mono uppercase tracking-wider text-[#777777]">Our Songs</span>
               </div>
-              <span className="text-[10px] font-mono text-[#555555]">
-                {recentSong.category}
-              </span>
+              {recentSong && (
+                <span className="text-[10px] font-mono text-[#555555]">
+                  {recentSong.category}
+                </span>
+              )}
             </div>
 
-            <div className="flex items-center gap-3">
-              <img
-                src={recentSong.coverUrl}
-                alt={recentSong.title}
-                className="h-12 w-12 rounded-2xl object-cover border border-white/10 shadow-md"
-              />
-              <div className="min-w-0">
-                <h4 className="font-serif text-sm text-white line-clamp-1">{recentSong.title}</h4>
-                <p className="text-xs text-[#777777] font-light line-clamp-1">{recentSong.artist}</p>
+            {isLoading ? (
+              <div className="flex items-center gap-3 p-2">
+                <Skeleton className="h-12 w-12 rounded-2xl" />
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-4 w-3/4 rounded-md" />
+                  <Skeleton className="h-3 w-1/2 rounded-md" />
+                </div>
               </div>
-            </div>
+            ) : recentSong ? (
+              <div className="flex items-center gap-3">
+                <img
+                  src={recentSong.coverUrl}
+                  alt={recentSong.title}
+                  className="h-12 w-12 rounded-2xl object-cover border border-white/10 shadow-md"
+                />
+                <div className="min-w-0">
+                  <h4 className="font-serif text-sm text-white line-clamp-1">{recentSong.title}</h4>
+                  <p className="text-xs text-[#777777] font-light line-clamp-1">{recentSong.artist}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-2xl bg-[#141414] border border-white/5">
+                <p className="text-xs text-[#777777] font-light">
+                  Add your favorite tracks to our music lounge.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="mt-4 flex items-center justify-between pt-3 border-t border-white/5">
-            <button
-              onClick={() => playSong(recentSong)}
-              className="text-xs text-[#AAAAAA] hover:text-white flex items-center gap-1.5"
-            >
-              <Play className="h-3.5 w-3.5 fill-current" />
-              Play track
-            </button>
+            {recentSong ? (
+              <button
+                onClick={() => playSong(recentSong)}
+                className="text-xs text-[#AAAAAA] hover:text-white flex items-center gap-1.5"
+              >
+                <Play className="h-3.5 w-3.5 fill-current" />
+                Play track
+              </button>
+            ) : <span />}
             <Link href="/music" className="text-xs text-[#777777] hover:text-white">
               All music →
             </Link>
@@ -334,15 +418,31 @@ export default function DashboardPage() {
                 <span className="text-xs font-mono uppercase tracking-wider text-[#777777]">Love Letters</span>
               </div>
               <span className="text-[10px] font-mono text-white bg-white/10 px-2 py-0.5 rounded-full">
-                Sealed
+                Vault
               </span>
             </div>
-            <h4 className="font-serif text-sm text-white">
-              &ldquo;{initialLetters[0].occasion}&rdquo;
-            </h4>
-            <p className="mt-1 text-xs text-[#777777] font-light">
-              From {initialLetters[0].authorName} with silver wax seal
-            </p>
+            {isLoading ? (
+              <div className="space-y-2 p-2">
+                <Skeleton className="h-4 w-1/2 rounded-md" />
+                <Skeleton className="h-3 w-3/4 rounded-md" />
+              </div>
+            ) : latestLetter ? (
+              <>
+                <h4 className="font-serif text-sm text-white">
+                  &ldquo;{latestLetter.occasion}&rdquo;
+                </h4>
+                <p className="mt-1 text-xs text-[#777777] font-light">
+                  From {latestLetter.authorName} with {latestLetter.waxSealColor || 'silver'} seal
+                </p>
+              </>
+            ) : (
+              <>
+                <h4 className="font-serif text-sm text-white">No letters sealed yet</h4>
+                <p className="mt-1 text-xs text-[#777777] font-light">
+                  Leave an unsealed or locked love letter for {partner.name}
+                </p>
+              </>
+            )}
           </div>
 
           <Link
@@ -362,14 +462,32 @@ export default function DashboardPage() {
                 <Calendar className="h-4 w-4 text-white" />
                 <span className="text-xs font-mono uppercase tracking-wider text-[#777777]">Upcoming Milestone</span>
               </div>
-              <span className="text-[10px] font-mono text-[#555555]">
-                {daysUntil(nextDate.date, true)} days
-              </span>
+              {nextDate && (
+                <span className="text-[10px] font-mono text-[#555555]">
+                  {daysUntil(nextDate.date, true)} days
+                </span>
+              )}
             </div>
-            <h4 className="font-serif text-sm text-white">{nextDate.title}</h4>
-            <p className="mt-1 text-xs text-[#777777] font-light line-clamp-2">
-              {nextDate.description}
-            </p>
+            {isLoading ? (
+              <div className="space-y-2 p-2">
+                <Skeleton className="h-4 w-1/2 rounded-md" />
+                <Skeleton className="h-3 w-3/4 rounded-md" />
+              </div>
+            ) : nextDate ? (
+              <>
+                <h4 className="font-serif text-sm text-white">{nextDate.title}</h4>
+                <p className="mt-1 text-xs text-[#777777] font-light line-clamp-2">
+                  {nextDate.description}
+                </p>
+              </>
+            ) : (
+              <>
+                <h4 className="font-serif text-sm text-white">No upcoming dates</h4>
+                <p className="mt-1 text-xs text-[#777777] font-light">
+                  Plan your next date, anniversary, or special moment together
+                </p>
+              </>
+            )}
           </div>
 
           <Link

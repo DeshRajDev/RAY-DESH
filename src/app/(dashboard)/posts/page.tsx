@@ -7,16 +7,24 @@ import { useApp } from '@/stores/app-context';
 import { Post } from '@/types';
 import { postService } from '@/services/post.service';
 import { formatDate } from '@/lib/date-utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PostsFeedPage() {
   const { user, partner, openMediaViewer, triggerHeartEffect } = useApp();
   const [posts, setPosts] = useState<Post[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [newPostContent, setNewPostContent] = useState('');
   const [newPostPhoto, setNewPostPhoto] = useState('');
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    postService.getPosts().then(res => setPosts(res.data ?? []));
+    postService.getPosts()
+      .then(res => {
+        setPosts(res.data ?? []);
+        setIsLoading(false);
+      })
+      .catch(() => setIsLoading(false));
+
     const unsubscribe = postService.subscribe(updated => setPosts(updated));
     return () => unsubscribe();
   }, []);
@@ -113,13 +121,43 @@ export default function PostsFeedPage() {
 
       {/* Posts Stream */}
       <div className="space-y-6">
-        {posts.map(post => {
-          const isLiked = post.likes.includes(user.id);
+        {isLoading ? (
+          <div className="space-y-6">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="rounded-3xl border border-white/5 bg-[#0F0F0F] p-5 space-y-4 shadow-xl">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <div className="space-y-1.5 flex-1">
+                    <Skeleton className="h-4 w-28 rounded-md" />
+                    <Skeleton className="h-3 w-20 rounded-md" />
+                  </div>
+                </div>
+                <Skeleton className="h-56 w-full rounded-2xl" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-3/4 rounded-md" />
+                  <Skeleton className="h-3 w-1/2 rounded-md" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="rounded-3xl border border-white/10 bg-[#0F0F0F] p-8 text-center space-y-3 shadow-md">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 border border-white/10 text-white">
+              <Sparkles className="h-6 w-6" />
+            </div>
+            <h3 className="font-serif text-lg text-white">Our Private Stream Awaits</h3>
+            <p className="text-xs text-[#777777] max-w-sm mx-auto font-light leading-relaxed">
+              No posts yet in our private sanctuary. Share your first thought, photo, or special note with {partner.name} above!
+            </p>
+          </div>
+        ) : (
+          posts.map(post => {
+            const isLiked = post.likes.includes(user.id);
 
-          return (
-            <motion.article
-              key={post.id}
-              initial={{ opacity: 0, y: 15 }}
+            return (
+              <motion.article
+                key={post.id}
+                initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               className="clay-card rounded-3xl overflow-hidden border border-white/10 bg-[#0F0F0F] shadow-xl"
             >
@@ -232,7 +270,7 @@ export default function PostsFeedPage() {
               </div>
             </motion.article>
           );
-        })}
+        }))}
       </div>
     </div>
   );

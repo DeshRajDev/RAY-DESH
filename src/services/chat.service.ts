@@ -1,5 +1,5 @@
 import { Message, ApiResponse } from '@/types';
-import { initialMessages } from '@/constants/initial-data';
+import { ApiClient } from './api/client';
 import { notificationService } from './notification.service';
 
 const CHAT_STORAGE_KEY = 'sanctuary_chat_messages_v2';
@@ -113,7 +113,7 @@ class ChatService {
         // ignore
       }
     }
-    this.messages = [...initialMessages];
+    this.messages = [];
   }
 
   private saveMessages() {
@@ -291,6 +291,17 @@ class ChatService {
 
   // --- Message CRUD ---
   public async getMessages(): Promise<ApiResponse<Message[]>> {
+    try {
+      const res = await ApiClient.get<ApiResponse<Message[]>>('/chat/messages');
+      if (res && res.success && Array.isArray(res.data)) {
+        this.messages = res.data;
+        this.saveMessages();
+        this.notifyListeners();
+        return res;
+      }
+    } catch {
+      // Return locally cached or empty messages
+    }
     return { success: true, data: [...this.messages] };
   }
 
@@ -304,6 +315,22 @@ class ChatService {
     replyToContent?: string;
     replyToSenderName?: string;
   }): Promise<ApiResponse<Message>> {
+    try {
+      const res = await ApiClient.post<ApiResponse<Message>>('/chat/messages', payload);
+      if (res && res.success && res.data) {
+        this.messages.push(res.data);
+        this.saveMessages();
+        this.notifyListeners();
+
+        if (this.channel) {
+          this.channel.postMessage({ type: 'NEW_MESSAGE', data: res.data });
+        }
+        return res;
+      }
+    } catch (err) {
+      console.error('Failed to send message via backend', err);
+    }
+
     const newMessage: Message = {
       id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       senderId: payload.senderId,
@@ -332,6 +359,24 @@ class ChatService {
   }
 
   public async toggleReaction(messageId: string, emoji: string, userId: string): Promise<ApiResponse<Message>> {
+    try {
+      const res = await ApiClient.post<ApiResponse<Message>>(`/chat/messages/${messageId}/react`, { emoji });
+      if (res && res.success && res.data) {
+        const idx = this.messages.findIndex(m => m.id === messageId);
+        if (idx > -1) {
+          this.messages[idx] = res.data;
+          this.saveMessages();
+          this.notifyListeners();
+          if (this.channel) {
+            this.channel.postMessage({ type: 'UPDATE_MESSAGES', data: this.messages });
+          }
+        }
+        return res;
+      }
+    } catch {
+      // Fallback local update
+    }
+
     const msg = this.messages.find(m => m.id === messageId);
     if (!msg) throw new Error('Message not found');
 
@@ -353,6 +398,24 @@ class ChatService {
   }
 
   public async togglePin(messageId: string): Promise<ApiResponse<Message>> {
+    try {
+      const res = await ApiClient.post<ApiResponse<Message>>(`/chat/messages/${messageId}/pin`);
+      if (res && res.success && res.data) {
+        const idx = this.messages.findIndex(m => m.id === messageId);
+        if (idx > -1) {
+          this.messages[idx] = res.data;
+          this.saveMessages();
+          this.notifyListeners();
+          if (this.channel) {
+            this.channel.postMessage({ type: 'UPDATE_MESSAGES', data: this.messages });
+          }
+        }
+        return res;
+      }
+    } catch {
+      // Fallback
+    }
+
     const msg = this.messages.find(m => m.id === messageId);
     if (!msg) throw new Error('Message not found');
     msg.isPinned = !msg.isPinned;
@@ -377,6 +440,24 @@ class ChatService {
   }
 
   public async editMessage(messageId: string, newContent: string): Promise<ApiResponse<Message>> {
+    try {
+      const res = await ApiClient.patch<ApiResponse<Message>>(`/chat/messages/${messageId}`, { content: newContent });
+      if (res && res.success && res.data) {
+        const idx = this.messages.findIndex(m => m.id === messageId);
+        if (idx > -1) {
+          this.messages[idx] = res.data;
+          this.saveMessages();
+          this.notifyListeners();
+          if (this.channel) {
+            this.channel.postMessage({ type: 'UPDATE_MESSAGES', data: this.messages });
+          }
+        }
+        return res;
+      }
+    } catch {
+      // Fallback
+    }
+
     const msg = this.messages.find(m => m.id === messageId);
     if (!msg) throw new Error('Message not found');
     msg.content = newContent;
@@ -391,6 +472,12 @@ class ChatService {
   }
 
   public async deleteMessage(messageId: string): Promise<ApiResponse<boolean>> {
+    try {
+      await ApiClient.delete(`/chat/messages/${messageId}`);
+    } catch {
+      // Continue local delete
+    }
+
     this.messages = this.messages.filter(m => m.id !== messageId);
     this.saveMessages();
     this.notifyListeners();

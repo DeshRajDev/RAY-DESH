@@ -5,12 +5,20 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, Gift, Heart, Cake, Music, Star, Volume2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useApp } from '@/stores/app-context';
-import { initialBirthdayData } from '@/constants/initial-data';
+import { birthdayService } from '@/services/birthday.service';
+import { BirthdayData } from '@/types';
 
 export function BirthdayCelebration() {
   const { isBirthdayActive, isBirthdayPreview, dismissBirthdayCelebration, couple, triggerHeartEffect } = useApp();
   const [isGiftOpened, setIsGiftOpened] = useState(false);
   const [activeTab, setActiveTab] = useState<'wishes' | 'secrets' | 'story'>('wishes');
+  const [birthdayData, setBirthdayData] = useState<BirthdayData | null>(null);
+
+  useEffect(() => {
+    birthdayService.getBirthdayData().then(res => setBirthdayData(res.data ?? null));
+    const unsub = birthdayService.subscribe(setBirthdayData);
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     if (isBirthdayActive) {
@@ -110,7 +118,7 @@ export function BirthdayCelebration() {
               </h1>
 
               <p className="mt-4 text-sm sm:text-base text-[#AAAAAA] max-w-lg leading-relaxed font-light italic">
-                &ldquo;{initialBirthdayData.specialMessageForPartner}&rdquo;
+                &ldquo;{birthdayData?.specialMessageForPartner || 'Thank you for being my constant light and greatest adventure.'}&rdquo;
               </p>
 
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
@@ -170,7 +178,7 @@ export function BirthdayCelebration() {
                     : 'text-[#777777] hover:text-white'
                 }`}
               >
-                Gift Wishlist ({initialBirthdayData.wishes.length})
+                Gift Wishlist ({birthdayData?.wishes?.length ?? 0})
               </button>
               <button
                 onClick={() => setActiveTab('secrets')}
@@ -180,67 +188,75 @@ export function BirthdayCelebration() {
                     : 'text-[#777777] hover:text-white'
                 }`}
               >
-                Secret Plans ({initialBirthdayData.plans.length})
+                Secret Plans ({birthdayData?.plans?.length ?? 0})
               </button>
             </div>
 
             <div className="pt-4 space-y-3">
               {activeTab === 'wishes' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {initialBirthdayData.wishes.map(wish => (
-                    <div
-                      key={wish.id}
-                      className="rounded-2xl border border-white/10 bg-[#161616] p-4 flex flex-col justify-between"
-                    >
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-serif text-sm text-white">{wish.title}</h4>
-                          <span className="text-xs font-mono text-[#AAAAAA]">{wish.price}</span>
+                (birthdayData?.wishes?.length ?? 0) === 0 ? (
+                  <p className="text-xs text-[#777777] text-center py-6">No gift wishes on the list yet.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {birthdayData?.wishes.map(wish => (
+                      <div
+                        key={wish.id}
+                        className="rounded-2xl border border-white/10 bg-[#161616] p-4 flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-serif text-sm text-white">{wish.title}</h4>
+                            <span className="text-xs font-mono text-[#AAAAAA]">{wish.price}</span>
+                          </div>
+                          <p className="mt-1 text-xs text-[#777777] font-light leading-relaxed">
+                            {wish.description}
+                          </p>
                         </div>
-                        <p className="mt-1 text-xs text-[#777777] font-light leading-relaxed">
-                          {wish.description}
-                        </p>
+                        <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
+                          <span className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded-full ${
+                            wish.isClaimed
+                              ? 'bg-white/10 text-white'
+                              : 'bg-white/5 text-[#777777]'
+                          }`}>
+                            {wish.isClaimed ? `Claimed by ${couple.partner1.name}` : 'Available'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
-                        <span className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded-full ${
-                          wish.isClaimed
-                            ? 'bg-white/10 text-white'
-                            : 'bg-white/5 text-[#777777]'
-                        }`}>
-                          {wish.isClaimed ? 'Claimed by Desh' : 'Available'}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )
               )}
 
               {activeTab === 'secrets' && (
-                <div className="space-y-2.5">
-                  {initialBirthdayData.plans.map(plan => (
-                    <div
-                      key={plan.id}
-                      className="rounded-2xl border border-white/10 bg-[#161616] p-4 flex items-center justify-between"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono uppercase bg-white/10 px-2 py-0.5 rounded-full text-[#E5E5E5]">
-                            {plan.category}
-                          </span>
-                          <h5 className="font-serif text-sm text-white">{plan.title}</h5>
+                (birthdayData?.plans?.length ?? 0) === 0 ? (
+                  <p className="text-xs text-[#777777] text-center py-6">No secret plans added yet.</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {birthdayData?.plans.map(plan => (
+                      <div
+                        key={plan.id}
+                        className="rounded-2xl border border-white/10 bg-[#161616] p-4 flex items-center justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono uppercase bg-white/10 px-2 py-0.5 rounded-full text-[#E5E5E5]">
+                              {plan.category}
+                            </span>
+                            <h5 className="font-serif text-sm text-white">{plan.title}</h5>
+                          </div>
+                          {plan.notes && (
+                            <p className="mt-1 text-xs text-[#777777] font-light">
+                              {plan.notes}
+                            </p>
+                          )}
                         </div>
-                        {plan.notes && (
-                          <p className="mt-1 text-xs text-[#777777] font-light">
-                            {plan.notes}
-                          </p>
-                        )}
+                        <span className="text-xs font-mono text-[#AAAAAA] uppercase shrink-0 ml-4">
+                          {plan.status}
+                        </span>
                       </div>
-                      <span className="text-xs font-mono text-[#AAAAAA] uppercase shrink-0 ml-4">
-                        {plan.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
           </div>

@@ -8,6 +8,7 @@ import { useApp } from '@/stores/app-context';
 import { Memory, MemoryCategory } from '@/types';
 import { memoryService } from '@/services/memory.service';
 import { Modal, EmptyState } from '@/components/ui/modal';
+import { Skeleton } from '@/components/ui/skeleton';
 import { formatDate } from '@/lib/date-utils';
 
 const CATEGORIES: MemoryCategory[] = [
@@ -24,6 +25,7 @@ const CATEGORIES: MemoryCategory[] = [
 export default function MemoriesPage() {
   const { user, openMediaViewer, triggerHeartEffect } = useApp();
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<MemoryCategory>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -38,7 +40,14 @@ export default function MemoriesPage() {
   const [newTags, setNewTags] = useState('');
 
   useEffect(() => {
-    memoryService.getMemories(selectedCategory).then(res => setMemories(res.data ?? []));
+    setIsLoading(true);
+    memoryService.getMemories(selectedCategory)
+      .then(res => {
+        setMemories(res.data ?? []);
+        setIsLoading(false);
+      })
+      .catch(() => setIsLoading(false));
+
     const unsubscribe = memoryService.subscribe(updated => {
       if (selectedCategory === 'All') setMemories(updated);
       else setMemories(updated.filter(m => m.category === selectedCategory));
@@ -142,7 +151,20 @@ export default function MemoriesPage() {
       </div>
 
       {/* Memories Grid Gallery */}
-      {filteredMemories.length === 0 ? (
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="rounded-3xl overflow-hidden border border-white/5 bg-[#0F0F0F] p-4 space-y-4">
+              <Skeleton className="h-48 w-full rounded-2xl" />
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-3/4 rounded-md" />
+                <Skeleton className="h-3 w-full rounded-md" />
+                <Skeleton className="h-3 w-1/2 rounded-md" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filteredMemories.length === 0 ? (
         <EmptyState
           icon={<Camera className="h-6 w-6" />}
           title="No memories yet in this category"

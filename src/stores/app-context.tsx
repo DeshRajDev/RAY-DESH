@@ -83,6 +83,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [floatingHearts, setFloatingHearts] = useState<{ id: string; x: number; y: number }[]>([]);
 
   useEffect(() => {
+    // Re-verify session with real backend API
+    authService.verifySession().then(() => {
+      setIsAuthenticated(authService.isAuthenticated());
+      setCurrentUser(authService.getCurrentUser());
+      setPartnerUser(authService.getPartnerUser());
+    });
+
     // Fetch initial couple profile
     userService.getCoupleProfile().then(res => {
       setCouple(res.data ?? null);

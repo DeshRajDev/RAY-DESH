@@ -1,8 +1,9 @@
 import { DateEvent, ApiResponse } from '@/types';
 import { initialDates } from '@/constants/initial-data';
 import { getNextOccurrence } from '@/lib/date-utils';
+import { ApiClient } from './api/client';
 
-const DATES_STORAGE_KEY = 'sanctuary_dates_v2';
+const DATES_STORAGE_KEY = 'sanctuary_dates_v3';
 
 class DateService {
   private dates: DateEvent[] = [];
@@ -18,7 +19,7 @@ class DateService {
         const stored = localStorage.getItem(DATES_STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             this.dates = parsed;
             return;
           }
@@ -41,6 +42,30 @@ class DateService {
   }
 
   public async getDates(): Promise<ApiResponse<DateEvent[]>> {
+    try {
+      if (typeof window !== 'undefined') {
+        const res = await ApiClient.getInstance().get<{ success: boolean; data: any[] }>('/dates');
+        if (res && res.success && Array.isArray(res.data)) {
+          const formatted: DateEvent[] = res.data.map(item => ({
+            id: item.id || item._id,
+            title: item.title,
+            date: item.date,
+            type: item.type || 'Special',
+            description: item.description || '',
+            location: item.location || '',
+            isRecurringYearly: !!item.isRecurringYearly,
+            remindDaysBefore: item.remindDaysBefore || [1],
+            photos: item.photos || [],
+            notes: item.notes || '',
+          }));
+          this.dates = formatted;
+          this.saveDates();
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
     const sorted = [...this.dates].sort((a, b) => {
       const nextA = a.isRecurringYearly ? getNextOccurrence(a.date).getTime() : new Date(a.date).getTime();
       const nextB = b.isRecurringYearly ? getNextOccurrence(b.date).getTime() : new Date(b.date).getTime();
@@ -50,10 +75,33 @@ class DateService {
   }
 
   public async addDate(payload: Omit<DateEvent, 'id'>): Promise<ApiResponse<DateEvent>> {
-    const newDate: DateEvent = {
-      ...payload,
-      id: `date_${Date.now()}`,
-    };
+    let newDate: DateEvent;
+    try {
+      const res = await ApiClient.getInstance().post<{ success: boolean; data: any }>('/dates', payload);
+      if (res && res.success && res.data) {
+        const item = res.data;
+        newDate = {
+          id: item.id || item._id,
+          title: item.title,
+          date: item.date,
+          type: item.type,
+          description: item.description || '',
+          location: item.location || '',
+          isRecurringYearly: !!item.isRecurringYearly,
+          remindDaysBefore: item.remindDaysBefore || [1],
+          photos: item.photos || [],
+          notes: item.notes || '',
+        };
+      } else {
+        throw new Error('Failed to create date');
+      }
+    } catch {
+      newDate = {
+        ...payload,
+        id: `date_${Date.now()}`,
+      };
+    }
+
     this.dates.push(newDate);
     this.saveDates();
     this.notify();
@@ -62,6 +110,12 @@ class DateService {
 
   public async deleteDate(id: string): Promise<ApiResponse<boolean>> {
     this.dates = this.dates.filter(d => d.id !== id);
+    try {
+      await ApiClient.getInstance().delete(`/dates/${id}`);
+    } catch (err) {
+      console.warn('Date delete sync error:', err);
+    }
+
     this.saveDates();
     this.notify();
     return { success: true, data: true };

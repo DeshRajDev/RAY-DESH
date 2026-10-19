@@ -1,5 +1,5 @@
 import { NotificationItem, ApiResponse } from '@/types';
-import { initialNotifications } from '@/constants/initial-data';
+import { ApiClient } from './api/client';
 
 const NOTIFICATIONS_STORAGE_KEY = 'sanctuary_notifications_v2';
 
@@ -17,16 +17,16 @@ class NotificationService {
         const stored = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             this.notifications = parsed;
             return;
           }
         }
       } catch {
-        // Fallback to initial
+        // Fallback
       }
     }
-    this.notifications = [...initialNotifications];
+    this.notifications = [];
   }
 
   private saveNotifications(): void {
@@ -51,10 +51,36 @@ class NotificationService {
   }
 
   public async getNotifications(): Promise<ApiResponse<NotificationItem[]>> {
+    try {
+      const res = await ApiClient.get<ApiResponse<NotificationItem[]>>('/notifications');
+      if (res && res.success && Array.isArray(res.data)) {
+        this.notifications = res.data;
+        this.saveNotifications();
+        this.notify();
+        return res;
+      }
+    } catch {
+      // Fallback
+    }
     return { success: true, data: [...this.notifications] };
   }
 
   public async markAsRead(id: string): Promise<ApiResponse<NotificationItem>> {
+    try {
+      const res = await ApiClient.post<ApiResponse<NotificationItem>>(`/notifications/${id}/read`);
+      if (res && res.success && res.data) {
+        const idx = this.notifications.findIndex(n => n.id === id);
+        if (idx > -1) {
+          this.notifications[idx] = res.data;
+          this.saveNotifications();
+          this.notify();
+        }
+        return res;
+      }
+    } catch {
+      // Fallback
+    }
+
     const notif = this.notifications.find(n => n.id === id);
     if (!notif) throw new Error('Notification not found');
     notif.isRead = true;
@@ -64,6 +90,12 @@ class NotificationService {
   }
 
   public async markAllAsRead(): Promise<ApiResponse<boolean>> {
+    try {
+      await ApiClient.post('/notifications/mark-all-read');
+    } catch {
+      // Fallback
+    }
+
     this.notifications.forEach(n => { n.isRead = true; });
     this.saveNotifications();
     this.notify();
