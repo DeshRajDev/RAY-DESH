@@ -173,6 +173,23 @@ export interface Song {
   category: 'Our Songs' | 'Her Favorites' | 'My Favorites' | 'Recently Added' | 'Most Played';
   lyricsSnippet?: string;
   note?: string;
+  provider?: string;
+  providerTrackId?: string;
+  licenseUrl?: string;
+  shareUrl?: string;
+}
+
+export interface JamendoTrack {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;
+  coverUrl: string;
+  audioUrl: string;
+  shareUrl: string;
+  licenseUrl?: string;
+  downloadAllowed: boolean;
 }
 
 export type DateEventType = 

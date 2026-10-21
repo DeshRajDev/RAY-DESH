@@ -3,12 +3,13 @@ import { authenticate } from '../../middleware/authenticate';
 import { requireCouple } from '../../middleware/authorize';
 import { AuthenticatedRequest } from '../../types';
 import { Song } from '../../models/Song';
+import { jamendoService } from './jamendo.service';
 import { sendSuccess, sendError } from '../../utils/response';
 import mongoose from 'mongoose';
 
 const router = Router();
 
-// GET all songs
+// GET all sanctuary songs
 router.get('/', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const songs = await Song.find({ coupleId: req.couple!.id }).sort({ isFavorite: -1, createdAt: -1 });
@@ -19,10 +20,98 @@ router.get('/', authenticate, requireCouple, async (req: AuthenticatedRequest, r
   }
 });
 
+// GET search Jamendo tracks
+router.get('/search', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if (!query) {
+      return sendSuccess(res, [], 'Empty query provided');
+    }
+
+    if (!jamendoService.isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Jamendo API client ID is not configured on the server. Please set JAMENDO_CLIENT_ID in your environment.',
+        error: { code: 'JAMENDO_NOT_CONFIGURED' },
+      });
+    }
+
+    const limit = Math.min(Math.max(1, parseInt(String(req.query.limit || 20), 10) || 20), 50);
+    const offset = Math.max(0, parseInt(String(req.query.offset || 0), 10) || 0);
+
+    const tracks = await jamendoService.searchTracks(query, limit, offset);
+    return sendSuccess(res, tracks);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Jamendo search failed';
+    const status = (err as any).statusCode || 500;
+    return sendError(res, msg, status);
+  }
+});
+
+// GET featured Jamendo tracks for discovery
+router.get('/featured', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!jamendoService.isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Jamendo API client ID is not configured on the server. Please set JAMENDO_CLIENT_ID in your environment.',
+        error: { code: 'JAMENDO_NOT_CONFIGURED' },
+      });
+    }
+
+    const limit = Math.min(Math.max(1, parseInt(String(req.query.limit || 20), 10) || 20), 50);
+    const tracks = await jamendoService.getFeaturedTracks(limit);
+    return sendSuccess(res, tracks);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to fetch featured tracks';
+    const status = (err as any).statusCode || 500;
+    return sendError(res, msg, status);
+  }
+});
+
+// GET single Jamendo track details
+router.get('/tracks/:id', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!jamendoService.isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Jamendo API client ID is not configured on the server. Please set JAMENDO_CLIENT_ID in your environment.',
+        error: { code: 'JAMENDO_NOT_CONFIGURED' },
+      });
+    }
+
+    const track = await jamendoService.getTrackById(req.params.id);
+    if (!track) {
+      return sendError(res, 'Track not found on Jamendo', 404);
+    }
+    return sendSuccess(res, track);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to retrieve track metadata';
+    const status = (err as any).statusCode || 500;
+    return sendError(res, msg, status);
+  }
+});
+
 // POST add song
 router.post('/', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { title, artist, album, coverUrl, audioUrl, duration = 180, spotifyUrl, category = 'Our Songs', addedByName, lyricsSnippet, note } = req.body;
+    const {
+      title,
+      artist,
+      album,
+      coverUrl,
+      audioUrl,
+      duration = 180,
+      spotifyUrl,
+      category = 'Our Songs',
+      addedByName,
+      lyricsSnippet,
+      note,
+      provider = 'custom',
+      providerTrackId,
+      licenseUrl,
+      shareUrl,
+    } = req.body;
 
     const song = await Song.create({
       coupleId: new mongoose.Types.ObjectId(req.couple!.id),
@@ -40,6 +129,10 @@ router.post('/', authenticate, requireCouple, async (req: AuthenticatedRequest, 
       note,
       isFavorite: false,
       playCount: 0,
+      provider,
+      providerTrackId,
+      licenseUrl,
+      shareUrl,
     });
 
     return sendSuccess(res, song.toJSON(), 'Song added', 201);

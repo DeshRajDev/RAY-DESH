@@ -1,4 +1,4 @@
-import { Song, ApiResponse } from '@/types';
+import { Song, JamendoTrack, ApiResponse } from '@/types';
 import { initialSongs } from '@/constants/initial-data';
 import { ApiClient } from './api/client';
 
@@ -12,6 +12,10 @@ export interface PlayerState {
   duration: number;
   isShuffle: boolean;
   repeatMode: 'off' | 'all' | 'one';
+  isLoading: boolean;
+  error: string | null;
+  volume: number;
+  isMuted: boolean;
 }
 
 class MusicService {
@@ -20,17 +24,22 @@ class MusicService {
   private isPlaying: boolean = false;
   private isShuffle: boolean = false;
   private repeatMode: 'off' | 'all' | 'one' = 'all';
+  private isLoading: boolean = false;
+  private error: string | null = null;
+  private volume: number = 0.85;
+  private isMuted: boolean = false;
   private offlineTrackIds: Set<string> = new Set();
   private listeners: ((songs: Song[]) => void)[] = [];
   private playerListeners: ((state: PlayerState) => void)[] = [];
-  
-  // Web Audio Context & Synthesizer for real audible music playback
+
+  // Web Audio Context & Synthesizer fallback
   private audioCtx: AudioContext | null = null;
   private synthInterval: NodeJS.Timeout | null = null;
   private birthdaySynthInterval: NodeJS.Timeout | null = null;
   private audioElement: HTMLAudioElement | null = null;
   private currentTime: number = 0;
-  private timeTicker: NodeJS.Timeout | null = null;
+  private duration: number = 180;
+  private boundAudioListeners: { [key: string]: EventListener } = {};
 
   constructor() {
     this.loadSongs();
@@ -103,7 +112,6 @@ class MusicService {
     return this.audioCtx;
   }
 
-  // Play a soft romantic lo-fi note
   private playRomanticTone(freq: number, type: OscillatorType = 'sine', duration: number = 1.2, volume: number = 0.08) {
     const ctx = this.getAudioContext();
     if (!ctx) return;
@@ -129,14 +137,13 @@ class MusicService {
     }
   }
 
-  // Start romantic ambient progression for background music
   private startAmbientProgression() {
     this.stopAmbientProgression();
     const chords = [
-      [261.63, 329.63, 392.00, 523.25], // C major
-      [220.00, 261.63, 329.63, 440.00], // A minor
-      [174.61, 220.00, 261.63, 349.23], // F major
-      [196.00, 246.94, 293.66, 392.00], // G major
+      [261.63, 329.63, 392.00, 523.25],
+      [220.00, 261.63, 329.63, 440.00],
+      [174.61, 220.00, 261.63, 349.23],
+      [196.00, 246.94, 293.66, 392.00],
     ];
     let chordIdx = 0;
     let noteIdx = 0;
@@ -162,38 +169,34 @@ class MusicService {
     }
   }
 
-  // Birthday "Happy Birthday" melody synthesizer
   public playBirthdayMelody() {
     this.stopBirthdayMelody();
     const melody: { note: number; dur: number }[] = [
-      { note: 261.63, dur: 0.4 }, // C4
-      { note: 261.63, dur: 0.4 }, // C4
-      { note: 293.66, dur: 0.8 }, // D4
-      { note: 261.63, dur: 0.8 }, // C4
-      { note: 349.23, dur: 0.8 }, // F4
-      { note: 329.63, dur: 1.2 }, // E4
-      
-      { note: 261.63, dur: 0.4 }, // C4
-      { note: 261.63, dur: 0.4 }, // C4
-      { note: 293.66, dur: 0.8 }, // D4
-      { note: 261.63, dur: 0.8 }, // C4
-      { note: 392.00, dur: 0.8 }, // G4
-      { note: 349.23, dur: 1.2 }, // F4
-
-      { note: 261.63, dur: 0.4 }, // C4
-      { note: 261.63, dur: 0.4 }, // C4
-      { note: 523.25, dur: 0.8 }, // C5
-      { note: 440.00, dur: 0.8 }, // A4
-      { note: 349.23, dur: 0.8 }, // F4
-      { note: 329.63, dur: 0.8 }, // E4
-      { note: 293.66, dur: 1.2 }, // D4
-
-      { note: 466.16, dur: 0.4 }, // Bb4
-      { note: 466.16, dur: 0.4 }, // Bb4
-      { note: 440.00, dur: 0.8 }, // A4
-      { note: 349.23, dur: 0.8 }, // F4
-      { note: 392.00, dur: 0.8 }, // G4
-      { note: 349.23, dur: 1.6 }, // F4
+      { note: 261.63, dur: 0.4 },
+      { note: 261.63, dur: 0.4 },
+      { note: 293.66, dur: 0.8 },
+      { note: 261.63, dur: 0.8 },
+      { note: 349.23, dur: 0.8 },
+      { note: 329.63, dur: 1.2 },
+      { note: 261.63, dur: 0.4 },
+      { note: 261.63, dur: 0.4 },
+      { note: 293.66, dur: 0.8 },
+      { note: 261.63, dur: 0.8 },
+      { note: 392.00, dur: 0.8 },
+      { note: 349.23, dur: 1.2 },
+      { note: 261.63, dur: 0.4 },
+      { note: 261.63, dur: 0.4 },
+      { note: 523.25, dur: 0.8 },
+      { note: 440.00, dur: 0.8 },
+      { note: 349.23, dur: 0.8 },
+      { note: 329.63, dur: 0.8 },
+      { note: 293.66, dur: 1.2 },
+      { note: 466.16, dur: 0.4 },
+      { note: 466.16, dur: 0.4 },
+      { note: 440.00, dur: 0.8 },
+      { note: 349.23, dur: 0.8 },
+      { note: 392.00, dur: 0.8 },
+      { note: 349.23, dur: 1.6 },
     ];
 
     let notePointer = 0;
@@ -217,11 +220,117 @@ class MusicService {
     }
   }
 
+  // --- Audio Element Life Cycle & Event Handlers ---
+  private setupAudioElement() {
+    if (typeof window === 'undefined') return;
+    if (!this.audioElement) {
+      this.audioElement = new Audio();
+      this.audioElement.preload = 'auto';
+    }
+
+    this.removeAudioListeners();
+
+    const onTimeUpdate = () => {
+      if (this.audioElement) {
+        this.currentTime = this.audioElement.currentTime;
+        this.notifyPlayer();
+      }
+    };
+
+    const onLoadedMetadata = () => {
+      if (this.audioElement && !isNaN(this.audioElement.duration)) {
+        this.duration = this.audioElement.duration;
+      } else if (this.currentSong?.duration) {
+        this.duration = this.currentSong.duration;
+      }
+      this.notifyPlayer();
+    };
+
+    const onWaiting = () => {
+      this.isLoading = true;
+      this.notifyPlayer();
+    };
+
+    const onPlaying = () => {
+      this.isLoading = false;
+      this.isPlaying = true;
+      this.error = null;
+      this.notifyPlayer();
+    };
+
+    const onCanPlay = () => {
+      this.isLoading = false;
+      this.notifyPlayer();
+    };
+
+    const onEnded = () => {
+      this.playNext();
+    };
+
+    const onError = () => {
+      this.isLoading = false;
+      this.isPlaying = false;
+      this.error = 'Streaming playback failed for this track.';
+      this.notifyPlayer();
+    };
+
+    this.boundAudioListeners = {
+      timeupdate: onTimeUpdate as EventListener,
+      loadedmetadata: onLoadedMetadata as EventListener,
+      waiting: onWaiting as EventListener,
+      playing: onPlaying as EventListener,
+      canplay: onCanPlay as EventListener,
+      ended: onEnded as EventListener,
+      error: onError as EventListener,
+    };
+
+    Object.entries(this.boundAudioListeners).forEach(([evt, handler]) => {
+      this.audioElement?.addEventListener(evt, handler);
+    });
+  }
+
+  private removeAudioListeners() {
+    if (this.audioElement && this.boundAudioListeners) {
+      Object.entries(this.boundAudioListeners).forEach(([evt, handler]) => {
+        this.audioElement?.removeEventListener(evt, handler);
+      });
+      this.boundAudioListeners = {};
+    }
+  }
+
+  private updateMediaSession(song: Song) {
+    if (typeof window !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: song.title,
+          artist: song.artist,
+          album: song.album || 'Ray — किरण Sanctuary',
+          artwork: [
+            { src: song.coverUrl, sizes: '512x512', type: 'image/jpeg' },
+          ],
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => this.togglePlay());
+        navigator.mediaSession.setActionHandler('pause', () => this.togglePlay());
+        navigator.mediaSession.setActionHandler('previoustrack', () => this.playPrevious());
+        navigator.mediaSession.setActionHandler('nexttrack', () => this.playNext());
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+          if (details.seekTime !== undefined) {
+            this.seekTo(details.seekTime);
+          }
+        });
+      } catch {
+        // media session fallback
+      }
+    }
+  }
+
+  // --- Sanctuary Songs API ---
   public async getSongs(category?: string): Promise<ApiResponse<Song[]>> {
     try {
       if (typeof window !== 'undefined') {
         const res = await ApiClient.getInstance().get<{ success: boolean; data: any[] }>('/music');
-        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+        if (res && res.success && Array.isArray(res.data)) {
           const formatted: Song[] = res.data.map(item => ({
             id: item.id || item._id,
             title: item.title,
@@ -237,6 +346,10 @@ class MusicService {
             category: (item.category as Song['category']) || 'Our Songs',
             lyricsSnippet: item.lyricsSnippet,
             note: item.note,
+            provider: item.provider,
+            providerTrackId: item.providerTrackId,
+            licenseUrl: item.licenseUrl,
+            shareUrl: item.shareUrl,
           }));
           this.songs = formatted;
           this.saveSongs();
@@ -253,18 +366,57 @@ class MusicService {
   }
 
   public async addSong(payload: Omit<Song, 'id' | 'dateAdded'>): Promise<ApiResponse<Song>> {
-    const newSong: Song = {
+    try {
+      const res = await ApiClient.post<ApiResponse<any>>('/music', payload);
+      if (res && res.success && res.data) {
+        const item = res.data;
+        const newSong: Song = {
+          id: item.id || item._id || `song_${Date.now()}`,
+          title: item.title,
+          artist: item.artist,
+          album: item.album || '',
+          duration: item.duration || 180,
+          coverUrl: item.coverUrl,
+          audioUrl: item.audioUrl,
+          addedById: item.addedById,
+          addedByName: item.addedByName || 'Sanctuary',
+          dateAdded: item.createdAt || new Date().toISOString(),
+          isFavorite: !!item.isFavorite,
+          category: (item.category as Song['category']) || payload.category,
+          lyricsSnippet: item.lyricsSnippet,
+          note: item.note,
+          provider: item.provider,
+          providerTrackId: item.providerTrackId,
+          licenseUrl: item.licenseUrl,
+          shareUrl: item.shareUrl,
+        };
+        this.songs.unshift(newSong);
+        this.saveSongs();
+        this.notify();
+        return { success: true, data: newSong };
+      }
+    } catch (err) {
+      console.warn('[MusicService] Failed to add song via backend:', err);
+    }
+
+    const fallbackSong: Song = {
       ...payload,
       id: `song_${Date.now()}`,
       dateAdded: new Date().toISOString(),
     };
-    this.songs.unshift(newSong);
+    this.songs.unshift(fallbackSong);
     this.saveSongs();
     this.notify();
-    return { success: true, data: newSong };
+    return { success: true, data: fallbackSong };
   }
 
   public async toggleFavorite(id: string): Promise<ApiResponse<Song>> {
+    try {
+      await ApiClient.post(`/music/${id}/favorite`);
+    } catch (err) {
+      console.warn('[MusicService] Backend toggle favorite fallback:', err);
+    }
+
     const s = this.songs.find(item => item.id === id);
     if (!s) throw new Error('Song not found');
     s.isFavorite = !s.isFavorite;
@@ -273,45 +425,183 @@ class MusicService {
     return { success: true, data: { ...s } };
   }
 
+  public async deleteSong(id: string): Promise<ApiResponse<boolean>> {
+    try {
+      await ApiClient.delete(`/music/${id}`);
+    } catch (err) {
+      console.warn('[MusicService] Failed to delete song on backend:', err);
+    }
+    this.songs = this.songs.filter(s => s.id !== id);
+    this.saveSongs();
+    this.notify();
+    return { success: true, data: true };
+  }
+
+  // --- Jamendo Music API Integration ---
+  public async searchJamendo(query: string, limit: number = 20, offset: number = 0): Promise<ApiResponse<JamendoTrack[]>> {
+    try {
+      const res = await ApiClient.get<ApiResponse<JamendoTrack[]>>(
+        `/music/search?q=${encodeURIComponent(query.trim())}&limit=${limit}&offset=${offset}`
+      );
+      return res;
+    } catch (err: any) {
+      return {
+        success: false,
+        error: {
+          code: err?.data?.error?.code || 'JAMENDO_SEARCH_FAILED',
+          message: err?.message || 'Failed to search Jamendo tracks',
+        },
+        data: [],
+      };
+    }
+  }
+
+  public async getFeaturedJamendo(limit: number = 20): Promise<ApiResponse<JamendoTrack[]>> {
+    try {
+      const res = await ApiClient.get<ApiResponse<JamendoTrack[]>>(`/music/featured?limit=${limit}`);
+      return res;
+    } catch (err: any) {
+      return {
+        success: false,
+        error: {
+          code: err?.data?.error?.code || 'JAMENDO_FEATURED_FAILED',
+          message: err?.message || 'Failed to fetch featured Jamendo tracks',
+        },
+        data: [],
+      };
+    }
+  }
+
+  public async getJamendoTrackById(trackId: string): Promise<ApiResponse<JamendoTrack | null>> {
+    try {
+      const res = await ApiClient.get<ApiResponse<JamendoTrack>>(`/music/tracks/${trackId}`);
+      return res;
+    } catch (err: any) {
+      return {
+        success: false,
+        error: {
+          code: 'JAMENDO_TRACK_FAILED',
+          message: err?.message || 'Failed to retrieve track metadata',
+        },
+        data: null,
+      };
+    }
+  }
+
+  public async addJamendoTrackToSanctuary(
+    track: JamendoTrack,
+    category: Song['category'] = 'Our Songs',
+    note?: string,
+    userName: string = 'Sanctuary',
+    userId: string = ''
+  ): Promise<ApiResponse<Song>> {
+    return this.addSong({
+      title: track.title,
+      artist: track.artist,
+      album: track.album || '',
+      coverUrl: track.coverUrl,
+      audioUrl: track.audioUrl,
+      duration: track.duration,
+      addedById: userId,
+      addedByName: userName,
+      isFavorite: false,
+      category,
+      note,
+      provider: 'jamendo',
+      providerTrackId: track.id,
+      licenseUrl: track.licenseUrl,
+      shareUrl: track.shareUrl,
+    });
+  }
+
+  // --- Playback Controls ---
   public playSong(song: Song) {
     this.currentSong = song;
     this.isPlaying = true;
     this.currentTime = 0;
+    this.duration = song.duration || 180;
+    this.error = null;
+    this.isLoading = !!song.audioUrl;
+
+    this.stopAmbientProgression();
 
     if (song.audioUrl && typeof window !== 'undefined') {
-      if (!this.audioElement) {
-        this.audioElement = new Audio();
+      this.setupAudioElement();
+      if (this.audioElement) {
+        this.audioElement.src = song.audioUrl;
+        this.audioElement.volume = this.volume;
+        this.audioElement.muted = this.isMuted;
+        this.audioElement.play().catch((err: unknown) => {
+          console.warn('[MusicService] Autoplay prevented or stream blocked:', err);
+          this.isLoading = false;
+          // Fallback to ambient if browser blocked audio or stream unreachable
+          this.startAmbientProgression();
+        });
       }
-      this.audioElement.src = song.audioUrl;
-      this.audioElement.play().catch(() => {
-        // Fallback to ambient progression if custom audio URL blocks
-        this.startAmbientProgression();
-      });
     } else {
       this.startAmbientProgression();
     }
 
-    this.startTimeTicker();
+    this.updateMediaSession(song);
+    this.recordPlayCount(song.id);
     this.notifyPlayer();
+  }
+
+  private async recordPlayCount(id: string) {
+    try {
+      await ApiClient.post(`/music/${id}/play`);
+    } catch {
+      // ignore
+    }
   }
 
   public togglePlay() {
     this.isPlaying = !this.isPlaying;
+    this.error = null;
+
     if (this.isPlaying) {
       if (this.audioElement && this.currentSong?.audioUrl) {
         this.audioElement.play().catch(() => this.startAmbientProgression());
       } else {
         this.startAmbientProgression();
       }
-      this.startTimeTicker();
     } else {
       if (this.audioElement) {
         this.audioElement.pause();
       }
       this.stopAmbientProgression();
-      this.stopTimeTicker();
     }
     this.notifyPlayer();
+  }
+
+  public seekTo(seconds: number) {
+    const clamped = Math.max(0, Math.min(seconds, this.duration || 180));
+    this.currentTime = clamped;
+    if (this.audioElement && this.currentSong?.audioUrl) {
+      this.audioElement.currentTime = clamped;
+    }
+    this.notifyPlayer();
+  }
+
+  public setVolume(vol: number) {
+    this.volume = Math.max(0, Math.min(1, vol));
+    if (this.audioElement) {
+      this.audioElement.volume = this.volume;
+    }
+    if (this.volume > 0 && this.isMuted) {
+      this.isMuted = false;
+      if (this.audioElement) this.audioElement.muted = false;
+    }
+    this.notifyPlayer();
+  }
+
+  public toggleMute(): boolean {
+    this.isMuted = !this.isMuted;
+    if (this.audioElement) {
+      this.audioElement.muted = this.isMuted;
+    }
+    this.notifyPlayer();
+    return this.isMuted;
   }
 
   public toggleShuffle(): boolean {
@@ -410,34 +700,15 @@ class MusicService {
     this.isPlaying = false;
     this.currentSong = null;
     this.currentTime = 0;
+    this.error = null;
+    this.isLoading = false;
     if (this.audioElement) {
       this.audioElement.pause();
-      this.audioElement = null;
+      this.audioElement.src = '';
+      this.removeAudioListeners();
     }
     this.stopAmbientProgression();
-    this.stopTimeTicker();
     this.notifyPlayer();
-  }
-
-  private startTimeTicker() {
-    this.stopTimeTicker();
-    this.timeTicker = setInterval(() => {
-      if (this.isPlaying && this.currentSong) {
-        this.currentTime += 1;
-        if (this.currentTime >= (this.currentSong.duration || 180)) {
-          this.playNext();
-        } else {
-          this.notifyPlayer();
-        }
-      }
-    }, 1000);
-  }
-
-  private stopTimeTicker() {
-    if (this.timeTicker) {
-      clearInterval(this.timeTicker);
-      this.timeTicker = null;
-    }
   }
 
   public subscribe(listener: (songs: Song[]) => void) {
@@ -453,9 +724,13 @@ class MusicService {
       currentSong: this.currentSong, 
       isPlaying: this.isPlaying, 
       currentTime: this.currentTime,
-      duration: this.currentSong?.duration || 180,
+      duration: this.duration,
       isShuffle: this.isShuffle,
       repeatMode: this.repeatMode,
+      isLoading: this.isLoading,
+      error: this.error,
+      volume: this.volume,
+      isMuted: this.isMuted,
     });
     return () => {
       this.playerListeners = this.playerListeners.filter(l => l !== listener);
@@ -467,14 +742,17 @@ class MusicService {
   }
 
   private notifyPlayer() {
-    const dur = this.currentSong?.duration || 180;
     this.playerListeners.forEach(l => l({ 
       currentSong: this.currentSong, 
       isPlaying: this.isPlaying,
       currentTime: this.currentTime,
-      duration: dur,
+      duration: this.duration,
       isShuffle: this.isShuffle,
       repeatMode: this.repeatMode,
+      isLoading: this.isLoading,
+      error: this.error,
+      volume: this.volume,
+      isMuted: this.isMuted,
     }));
   }
 }

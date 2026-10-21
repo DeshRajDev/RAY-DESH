@@ -16,6 +16,10 @@ export interface ISong extends Document {
   note?: string;
   isFavorite: boolean;
   playCount: number;
+  provider?: string;
+  providerTrackId?: string;
+  licenseUrl?: string;
+  shareUrl?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,6 +41,10 @@ const songSchema = new Schema<ISong>(
     note: { type: String },
     isFavorite: { type: Boolean, default: false, index: true },
     playCount: { type: Number, default: 0 },
+    provider: { type: String, default: 'custom' },
+    providerTrackId: { type: String },
+    licenseUrl: { type: String },
+    shareUrl: { type: String },
   },
   {
     timestamps: true,
