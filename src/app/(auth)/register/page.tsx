@@ -30,14 +30,12 @@ export default function RegisterPage() {
           <div className="relative mx-auto flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/20 shadow-lg">
             <img
               src="/icons/ray-logo-cute-web.png"
-              alt="Ray — किरण"
+              alt="Ray"
               className="h-10 w-10 object-contain drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]"
             />
           </div>
-          <div className="inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10">
+          <div className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-white/5 border border-white/10">
             <span className="font-serif tracking-widest text-xs font-semibold text-white">Ray</span>
-            <span className="text-white/40 text-xs">—</span>
-            <span className="text-xs font-medium text-white/80">किरण</span>
           </div>
           <h1 className="font-serif text-2xl sm:text-3xl text-white font-light tracking-tight">
             Create Our Space

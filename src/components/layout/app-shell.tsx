@@ -35,7 +35,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Lock className="h-5 w-5 text-white animate-pulse" />
           </div>
           <p className="font-mono text-xs text-[#777777] uppercase tracking-widest">
-            AUTHENTICATING RAY — किरण...
+            AUTHENTICATING RAY...
           </p>
         </div>
       </div>

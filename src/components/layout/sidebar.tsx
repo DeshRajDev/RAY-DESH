@@ -65,7 +65,7 @@ export function Sidebar() {
             <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] group-hover:scale-105 transition-transform">
               <img
                 src="/icons/ray-logo-cute-web.png"
-                alt="Ray — किरण"
+                alt="Ray"
                 className="h-7 w-7 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
               />
             </div>
@@ -74,10 +74,6 @@ export function Sidebar() {
                 <h1 className="font-serif text-lg font-light tracking-wide text-white">
                   Ray
                 </h1>
-                <span className="text-xs text-white/40 font-light">—</span>
-                <span className="text-sm font-medium text-white/90">
-                  किरण
-                </span>
               </div>
               <p className="text-[10px] font-mono tracking-widest text-[#777777] uppercase mt-0.5">
                 Private Sanctuary

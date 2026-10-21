@@ -39,7 +39,7 @@ class UserService {
             partner2: me.id === 'user_2' ? me : partner,
             anniversaryDate: c.anniversaryDate || this.couple.anniversaryDate,
             relationshipStartDate: c.relationshipStartDate || this.couple.relationshipStartDate,
-            customTitle: c.customTitle || 'Ray — किरण',
+            customTitle: c.customTitle || 'Ray',
             theme: c.theme || 'dark',
             coupleAvatar: c.coupleAvatar || this.couple.coupleAvatar,
             soundEnabled: c.soundEnabled ?? true,

@@ -11,13 +11,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Ray — किरण",
-  description: "A private digital home to preserve conversations, memories, songs, trips, and relationship milestones for Ray — किरण.",
+  title: "Ray",
+  description: "A private digital home to preserve conversations, memories, songs, trips, and relationship milestones for Ray.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Ray — किरण",
+    title: "Ray",
   },
   icons: {
     icon: [

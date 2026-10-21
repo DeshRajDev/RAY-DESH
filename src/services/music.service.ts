@@ -317,7 +317,7 @@ class MusicService {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: song.title,
           artist: song.artist,
-          album: song.album || 'Ray — किरण Sanctuary',
+          album: song.album || 'Ray Sanctuary',
           artwork: [
             { src: song.coverUrl, sizes: '512x512', type: 'image/jpeg' },
           ],

@@ -1,5 +1,5 @@
 /**
- * Ray — किरण Service Worker
+ * Ray Service Worker
  * Secure, privacy-preserving Progressive Web App Service Worker.
  *
  * CRITICAL PRIVACY & SECURITY RULES:
@@ -77,7 +77,7 @@ self.addEventListener('fetch', (event) => {
             return cachedOffline;
           }
           return new Response(
-            '<html><body style="background:#050505;color:#fff;font-family:sans-serif;padding:2rem;text-align:center;"><h2>Ray — किरण</h2><p>You are currently offline. Please reconnect to access your private sanctuary.</p></body></html>',
+            '<html><body style="background:#050505;color:#fff;font-family:sans-serif;padding:2rem;text-align:center;"><h2>Ray</h2><p>You are currently offline. Please reconnect to access your private sanctuary.</p></body></html>',
             { headers: { 'Content-Type': 'text/html' } }
           );
         })

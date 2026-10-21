@@ -25,7 +25,7 @@ import { logger } from './utils/logger';
 async function seed() {
   try {
     await connectDatabase();
-    logger.info('🌱 Seeding database for Ray — किरण sanctuary...');
+    logger.info('🌱 Seeding database for Ray sanctuary...');
 
     // Clear existing collections
     await Promise.all([
@@ -94,7 +94,7 @@ async function seed() {
       anniversaryDate: '2026-09-27T00:00:00.000Z',
       relationshipStartDate: '2026-09-27T00:00:00.000Z',
       theme: 'dark',
-      customTitle: 'Ray — किरण',
+      customTitle: 'Ray',
       coupleAvatar: 'https://images.unsplash.com/photo-1522673607200-164d1b6ce486?w=600&auto=format&fit=crop&q=80',
       soundEnabled: true,
       privacyPinEnabled: false,
@@ -111,7 +111,7 @@ async function seed() {
         coupleId: couple._id,
         senderId: rey._id,
         receiverId: desh._id,
-        content: 'Welcome to Ray — किरण, our private sanctuary ❤️ Forever starts right here.',
+        content: 'Welcome to Ray, our private sanctuary ❤️ Forever starts right here.',
         type: 'text',
         reactions: [{ emoji: '❤️', userId: desh._id, timestamp: '2026-09-27T12:00:00.000Z' }],
         isRead: true,
@@ -211,7 +211,7 @@ async function seed() {
     await Memory.create([
       {
         coupleId: couple._id,
-        title: 'The Beginning of Ray — किरण',
+        title: 'The Beginning of Ray',
         description: 'The official beginning of our private sanctuary under the autumn stars.',
         date: '2026-09-27',
         location: 'Private Sanctuary',
@@ -246,7 +246,7 @@ async function seed() {
       {
         coupleId: couple._id,
         authorId: desh._id,
-        caption: 'Welcome to Ray — किरण. A private space made exclusively for us.',
+        caption: 'Welcome to Ray. A private space made exclusively for us.',
         mediaUrls: ['https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=1200&auto=format&fit=crop&q=80'],
         likes: [{ userId: rey._id, emoji: '❤️' }],
         comments: [],
@@ -390,7 +390,7 @@ async function seed() {
         title: 'Officially Us',
         date: '2026-09-27',
         category: 'commitments',
-        description: 'The day we promised each other our hearts. The beginning of Ray — किरण.',
+        description: 'The day we promised each other our hearts. The beginning of Ray.',
         highlightQuote: 'In all the world, there is no heart for me like yours.',
         photos: ['https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=1200&auto=format&fit=crop&q=80'],
         song: {
@@ -406,7 +406,7 @@ async function seed() {
         coupleId: couple._id,
         recipientId: desh._id,
         type: 'date_soon',
-        title: 'Welcome to Ray — किरण',
+        title: 'Welcome to Ray',
         description: 'Your private sanctuary is live and connected.',
         isRead: false,
         linkUrl: '/dashboard',
@@ -416,7 +416,7 @@ async function seed() {
         coupleId: couple._id,
         recipientId: rey._id,
         type: 'date_soon',
-        title: 'Welcome to Ray — किरण',
+        title: 'Welcome to Ray',
         description: 'Your private sanctuary is live and connected.',
         isRead: false,
         linkUrl: '/dashboard',
@@ -440,7 +440,7 @@ async function seed() {
       },
     ]);
 
-    logger.info('🎉 Ray — किरण database seeded successfully with users, dates, and clean starter entries!');
+    logger.info('🎉 Ray database seeded successfully with users, dates, and clean starter entries!');
     await disconnectDatabase();
     process.exit(0);
   } catch (error) {

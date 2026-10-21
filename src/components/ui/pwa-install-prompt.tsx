@@ -147,13 +147,15 @@ export function PWAInstallPrompt() {
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <img
-                  src="/icons/icon-192.png"
-                  alt="Ray — किरण"
-                  className="h-10 w-10 rounded-xl border border-white/10 object-cover"
-                />
+                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/15 shadow-inner">
+                  <img
+                    src="/icons/ray-logo-cute-web.png"
+                    alt="Ray"
+                    className="h-8 w-8 object-contain"
+                  />
+                </div>
                 <div>
-                  <h4 className="font-serif text-xs font-normal text-white">Install Ray — किरण</h4>
+                  <h4 className="font-serif text-xs font-normal text-white">Install Ray</h4>
                   <p className="text-[11px] text-[#777777] font-light">
                     Add to your home screen for quick, offline-ready couple access.
                   </p>

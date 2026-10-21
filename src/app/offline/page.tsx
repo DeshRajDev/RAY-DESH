@@ -32,7 +32,7 @@ export default function OfflinePage() {
         <div className="mx-auto relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-[#222222] to-[#111111] border border-white/20 shadow-lg">
           <img
             src="/icons/ray-logo-cute-web.png"
-            alt="Ray — किरण"
+            alt="Ray"
             className="h-12 w-12 object-contain"
           />
           <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-rose-500/90 text-white shadow-md">
@@ -42,10 +42,8 @@ export default function OfflinePage() {
 
         {/* Brand & Status Text */}
         <div className="space-y-1.5">
-          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs font-serif text-[#AAAAAA]">
+          <div className="inline-flex items-center px-3 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs font-serif text-[#AAAAAA]">
             <span>Ray</span>
-            <span className="opacity-40">—</span>
-            <span>किरण</span>
           </div>
 
           <h1 className="font-serif text-2xl sm:text-3xl font-light text-white tracking-tight">
@@ -80,7 +78,7 @@ export default function OfflinePage() {
 
         {/* Footer info */}
         <div className="pt-4 border-t border-white/5 text-[10px] font-mono text-[#555555]">
-          Ray — किरण • Progressive Web App Shell Active
+          Ray • Progressive Web App Shell Active
         </div>
       </div>
     </div>

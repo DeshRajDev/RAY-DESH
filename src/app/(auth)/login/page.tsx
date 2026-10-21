@@ -61,7 +61,7 @@ export default function LoginPage() {
           <div className="relative mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/20 shadow-[0_4px_16px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)]">
             <img
               src="/icons/ray-logo-cute-web.png"
-              alt="Ray — किरण"
+              alt="Ray"
               className="h-12 w-12 object-contain drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]"
             />
           </div>
@@ -69,13 +69,9 @@ export default function LoginPage() {
             <h1 className="font-serif text-2xl sm:text-3xl text-white font-light tracking-tight">
               Ray
             </h1>
-            <span className="text-lg sm:text-xl text-white/40 font-light">—</span>
-            <span className="text-xl sm:text-2xl text-white/90 font-normal">
-              किरण
-            </span>
           </div>
           <p className="text-xs text-[#888888] font-light">
-            Enter your phone number or email and password to enter Ray — किरण.
+            Enter your phone number or email and password to enter Ray.
           </p>
         </div>
 

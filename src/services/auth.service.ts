@@ -176,7 +176,7 @@ class AuthService {
             partner2: mappedRole === 'user_2' ? userObj : this.getPartnerUser(),
             anniversaryDate: backendCouple.anniversaryDate,
             relationshipStartDate: backendCouple.relationshipStartDate,
-            customTitle: backendCouple.customTitle || 'Ray — किरण',
+            customTitle: backendCouple.customTitle || 'Ray',
             theme: backendCouple.theme || 'dark',
             coupleAvatar: backendCouple.coupleAvatar,
             soundEnabled: backendCouple.soundEnabled ?? true,

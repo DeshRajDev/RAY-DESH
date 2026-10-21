@@ -24,14 +24,12 @@ export function Header() {
           <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/20 shadow-inner group-hover:scale-105 transition-transform">
             <img
               src="/icons/ray-logo-cute-web.png"
-              alt="Ray — किरण"
+              alt="Ray"
               className="h-6 w-6 object-contain"
             />
           </div>
           <div className="flex items-baseline gap-1 min-w-0">
             <span className="font-serif text-sm font-medium text-white tracking-wide">Ray</span>
-            <span className="text-[10px] text-white/40 font-light">—</span>
-            <span className="text-xs font-normal text-white/90 truncate">किरण</span>
           </div>
         </Link>
       </div>

@@ -32,7 +32,6 @@
       fill="url(#heartGrad)" filter="url(#glow)"/>
   </g>
 
-  <!-- Brand Typography: Ray — किरण -->
-  <text x="256" y="420" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="600" letter-spacing="3">RAY</text>
-  <text x="256" y="456" text-anchor="middle" fill="rgba(255,255,255,0.65)" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="500" letter-spacing="2">किरण</text>
+  <!-- Brand Typography: Ray -->
+  <text x="256" y="435" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="32" font-weight="600" letter-spacing="4">RAY</text>
 </svg>
