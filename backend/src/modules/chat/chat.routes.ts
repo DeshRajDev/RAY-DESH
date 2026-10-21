@@ -3,6 +3,7 @@ import { authenticate } from '../../middleware/authenticate';
 import { requireCouple } from '../../middleware/authorize';
 import { AuthenticatedRequest } from '../../types';
 import { Message } from '../../models/Message';
+import { getSocketIo } from '../../sockets';
 import { sendSuccess, sendError } from '../../utils/response';
 import mongoose from 'mongoose';
 
@@ -74,11 +75,19 @@ router.post('/messages', authenticate, requireCouple, async (req: AuthenticatedR
       isPinned: false,
       isFavorite: false,
       isRead: false,
-      isDelivered: true,
+      isDelivered: false,
+      status: 'sent',
       idempotencyKey,
     });
 
-    return sendSuccess(res, message.toJSON(), 'Message sent', 201);
+    const messageJson = message.toJSON();
+
+    const io = getSocketIo();
+    if (io) {
+      io.to(`couple:${couple.id}`).emit('message:new', messageJson);
+    }
+
+    return sendSuccess(res, messageJson, 'Message sent', 201);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to send message';
     return sendError(res, msg, 500);
@@ -188,17 +197,76 @@ router.post('/messages/:id/pin', authenticate, requireCouple, async (req: Authen
   }
 });
 
+// POST mark messages as delivered
+router.post('/delivered', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { messageIds } = req.body;
+    const query: Record<string, unknown> = {
+      coupleId: req.couple!.id,
+      receiverId: req.user!.id,
+      isDelivered: false,
+    };
+    if (Array.isArray(messageIds) && messageIds.length > 0) {
+      query._id = { $in: messageIds };
+    }
+
+    const now = new Date();
+    await Message.updateMany(query, {
+      isDelivered: true,
+      status: 'delivered',
+      deliveredAt: now,
+    });
+
+    const io = getSocketIo();
+    if (io) {
+      io.to(`couple:${req.couple!.id}`).emit('message:status', {
+        messageIds: messageIds || [],
+        status: 'delivered',
+        deliveredAt: now.toISOString(),
+      });
+    }
+
+    return sendSuccess(res, { delivered: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to mark messages delivered';
+    return sendError(res, msg, 500);
+  }
+});
+
 // POST mark messages as read
 router.post('/read', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    await Message.updateMany(
-      {
-        coupleId: req.couple!.id,
-        receiverId: req.user!.id,
-        isRead: false,
-      },
-      { isRead: true }
-    );
+    const { messageIds } = req.body;
+    const query: Record<string, unknown> = {
+      coupleId: req.couple!.id,
+      receiverId: req.user!.id,
+      isRead: false,
+    };
+    if (Array.isArray(messageIds) && messageIds.length > 0) {
+      query._id = { $in: messageIds };
+    }
+
+    const now = new Date();
+    await Message.updateMany(query, {
+      isRead: true,
+      isDelivered: true,
+      status: 'read',
+      readAt: now,
+    });
+
+    const io = getSocketIo();
+    if (io) {
+      io.to(`couple:${req.couple!.id}`).emit('message:status', {
+        messageIds: messageIds || [],
+        status: 'read',
+        readAt: now.toISOString(),
+        readerId: req.user!.id,
+      });
+      io.to(`couple:${req.couple!.id}`).emit('message:read', {
+        readerId: req.user!.id,
+        messageIds: messageIds || [],
+      });
+    }
 
     return sendSuccess(res, { read: true });
   } catch (err: unknown) {

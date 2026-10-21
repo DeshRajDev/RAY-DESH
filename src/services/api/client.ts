@@ -91,8 +91,9 @@ export class ApiClient {
     }
 
     const token = this.getToken();
+    const isFormData = customConfig.body instanceof FormData;
     const defaultHeaders: HeadersInit = {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     };
@@ -115,7 +116,6 @@ export class ApiClient {
       return await response.json();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown network error';
-      // In mock mode or dev fallback, gracefully log
       console.warn(`[ApiClient] Request to ${endpoint} routed through fallback handler:`, message);
       throw err;
     }
@@ -126,31 +126,59 @@ export class ApiClient {
   }
 
   public post<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<T> {
+    const isFormData = body instanceof FormData;
     return this.request<T>(endpoint, {
       ...options,
       method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
+      body: isFormData ? body : body ? JSON.stringify(body) : undefined,
     });
   }
 
   public put<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<T> {
+    const isFormData = body instanceof FormData;
     return this.request<T>(endpoint, {
       ...options,
       method: 'PUT',
-      body: body ? JSON.stringify(body) : undefined,
+      body: isFormData ? body : body ? JSON.stringify(body) : undefined,
     });
   }
 
   public patch<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<T> {
+    const isFormData = body instanceof FormData;
     return this.request<T>(endpoint, {
       ...options,
       method: 'PATCH',
-      body: body ? JSON.stringify(body) : undefined,
+      body: isFormData ? body : body ? JSON.stringify(body) : undefined,
     });
   }
 
   public delete<T>(endpoint: string, options?: RequestOptions): Promise<T> {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' });
+  }
+
+  public upload<T>(endpoint: string, formData: FormData): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  public static upload<T>(endpoint: string, formData: FormData): Promise<T> {
+    return ApiClient.getInstance().upload<T>(endpoint, formData);
+  }
+
+  public static getBaseOrigin(): string {
+    return API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+  }
+
+  public static resolveAssetUrl(url?: string): string {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
+      return url;
+    }
+    const origin = ApiClient.getBaseOrigin();
+    const cleanPath = url.startsWith('/') ? url : `/${url}`;
+    return `${origin}${cleanPath}`;
   }
 }
 

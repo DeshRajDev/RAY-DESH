@@ -265,6 +265,25 @@ class YouTubePlayerManager {
     return 0;
   }
 
+  public requestFullscreen() {
+    try {
+      const iframe = this.player?.getIframe?.() || document.getElementById('global-youtube-player-frame');
+      if (iframe) {
+        if (iframe.requestFullscreen) {
+          iframe.requestFullscreen();
+        } else if ((iframe as any).webkitRequestFullscreen) {
+          (iframe as any).webkitRequestFullscreen();
+        } else if ((iframe as any).mozRequestFullScreen) {
+          (iframe as any).mozRequestFullScreen();
+        } else if ((iframe as any).msRequestFullscreen) {
+          (iframe as any).msRequestFullscreen();
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to trigger fullscreen:', err);
+    }
+  }
+
   private startTimeTracking() {
     this.stopTimeTracking();
     this.timeTicker = setInterval(() => {

@@ -29,6 +29,9 @@ export interface IMessage extends Document {
   isFavorite: boolean;
   isRead: boolean;
   isDelivered: boolean;
+  status: 'sent' | 'delivered' | 'read';
+  deliveredAt?: Date;
+  readAt?: Date;
   isEdited: boolean;
   idempotencyKey?: string;
   createdAt: Date;
@@ -64,7 +67,10 @@ const messageSchema = new Schema<IMessage>(
     isPinned: { type: Boolean, default: false },
     isFavorite: { type: Boolean, default: false },
     isRead: { type: Boolean, default: false },
-    isDelivered: { type: Boolean, default: true },
+    isDelivered: { type: Boolean, default: false },
+    status: { type: String, enum: ['sent', 'delivered', 'read'], default: 'sent', index: true },
+    deliveredAt: { type: Date },
+    readAt: { type: Date },
     isEdited: { type: Boolean, default: false },
     idempotencyKey: { type: String, sparse: true, index: true },
   },

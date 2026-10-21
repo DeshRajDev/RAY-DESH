@@ -21,11 +21,12 @@ import {
   Video,
 } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { musicService, PlayerState } from '@/services/music.service';
 
 export function MiniPlayer() {
   const router = useRouter();
+  const pathname = usePathname();
   const { currentSong, isPlaying, togglePlay, playNextSong, playPrevSong, triggerHeartEffect, closePlayer } = useApp();
   const [progress, setProgress] = useState(0);
   const [playerState, setPlayerState] = useState<PlayerState | null>(null);
@@ -50,6 +51,11 @@ export function MiniPlayer() {
   };
 
   const isYouTube = currentSong?.provider === 'youtube';
+
+  // On /music page, the full-size YouTube cinema player handles rendering
+  if (pathname === '/music') {
+    return null;
+  }
 
   return (
     <AnimatePresence>

@@ -62,6 +62,9 @@ export interface Message {
   isFavorite?: boolean;
   isRead: boolean;
   isDelivered: boolean;
+  status?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+  deliveredAt?: string;
+  readAt?: string;
   isEdited?: boolean;
   createdAt: string;
   updatedAt?: string;

@@ -8,26 +8,26 @@ import {
   Paperclip, 
   Image as ImageIcon, 
   Mic, 
-  MoreVertical, 
   Pin, 
   Check, 
   CheckCheck, 
   Heart, 
   Reply, 
   Trash2, 
-  Edit2, 
   X, 
   Search, 
-  Phone, 
-  Video, 
   Play, 
   Pause, 
   Sparkles,
   Info,
-  Sliders,
   Palette,
   Upload,
-  CheckCircle2
+  Download,
+  AlertCircle,
+  Loader2,
+  Camera,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
 import { Message, MessageAttachment } from '@/types';
@@ -87,9 +87,12 @@ export default function ChatPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [activeAttachment, setActiveAttachment] = useState<MessageAttachment | null>(null);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [mediaUploadError, setMediaUploadError] = useState<string | null>(null);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [showRightInfo, setShowRightInfo] = useState(false);
   const [activePlayingVoiceId, setActivePlayingVoiceId] = useState<string | null>(null);
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
 
   // Presence & Typing State
   const [partnerPresence, setPartnerPresence] = useState<UserPresence>(() => 
@@ -104,15 +107,17 @@ export default function ChatPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
 
-  // Heartbeat & Presence
+  // Initialize Real Socket Connection & Mark Chat as Active
   useEffect(() => {
-    chatService.startPresence(user.id);
+    chatService.initSocket(user.id);
+    chatService.setChatViewActive(true);
 
-    const checkInterval = setInterval(() => {
-      setPartnerPresence(chatService.getPartnerPresence(partner.id));
-    }, 3000);
+    const unsubConnection = chatService.subscribeConnection(connected => {
+      setIsSocketConnected(connected);
+    });
 
     const unsubPresence = chatService.subscribePresence(data => {
       if (data.userId === partner.id) {
@@ -130,16 +135,11 @@ export default function ChatPage() {
       setWallpaper(updatedWp);
     });
 
-    return () => {
-      chatService.stopPresence(user.id);
-      clearInterval(checkInterval);
-      unsubPresence();
-      unsubTyping();
-      unsubWallpaper();
-    };
-  }, [user.id, partner.id]);
+    const unsubMessages = chatService.subscribe(updated => {
+      setMessages(updated);
+    });
 
-  useEffect(() => {
+    // Load initial messages from backend
     chatService.getMessages()
       .then(res => {
         setMessages(res.data ?? []);
@@ -147,13 +147,20 @@ export default function ChatPage() {
       })
       .catch(() => setIsLoading(false));
 
-    const unsubscribe = chatService.subscribe(updated => setMessages(updated));
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      chatService.setChatViewActive(false);
+      chatService.stopTyping(user.id);
+      unsubConnection();
+      unsubPresence();
+      unsubTyping();
+      unsubWallpaper();
+      unsubMessages();
+    };
+  }, [user.id, partner.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isPartnerTyping]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -187,21 +194,22 @@ export default function ChatPage() {
       ? 'video' 
       : 'text';
 
+    const textToSend = inputText.trim();
+    setInputText('');
+    setReplyMessage(null);
+    setActiveAttachment(null);
+    setShowEmojiPicker(false);
+
     await chatService.sendMessage({
       senderId: user.id,
       receiverId: partner.id,
-      content: inputText.trim(),
+      content: textToSend,
       type,
       attachments,
       replyToId: replyMessage?.id,
       replyToContent: replyMessage?.content,
       replyToSenderName: replyMessage ? (replyMessage.senderId === user.id ? user.name : partner.name) : undefined,
     });
-
-    setInputText('');
-    setReplyMessage(null);
-    setActiveAttachment(null);
-    setShowEmojiPicker(false);
   };
 
   const handleToggleReaction = (messageId: string, emoji: string) => {
@@ -219,19 +227,46 @@ export default function ChatPage() {
     chatService.togglePin(messageId);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const fakeUrl = URL.createObjectURL(file);
-    const isImage = file.type.startsWith('image/');
-    setActiveAttachment({
-      id: `att_${Date.now()}`,
-      type: isImage ? 'image' : 'video',
-      url: isImage ? fakeUrl : 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=800&auto=format&fit=crop&q=80',
-      name: file.name,
-      size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-    });
+    setIsUploadingMedia(true);
+    setMediaUploadError(null);
+
+    try {
+      const uploaded = await chatService.uploadMedia(file);
+      setActiveAttachment({
+        id: `att_${Date.now()}`,
+        type: uploaded.type,
+        url: uploaded.url,
+        name: uploaded.name,
+        size: uploaded.size,
+      });
+    } catch (err: any) {
+      setMediaUploadError(err.message || 'Media upload failed. Please try again.');
+    } finally {
+      setIsUploadingMedia(false);
+      // Reset input value to allow selecting same file again
+      e.target.value = '';
+    }
+  };
+
+  const handleDownloadMedia = async (url: string, filename: string) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(url, '_blank');
+    }
   };
 
   const handleWallpaperFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -275,13 +310,13 @@ export default function ChatPage() {
     }, 2000);
   };
 
-  // Human-readable presence text like WhatsApp
+  // WhatsApp-style presence indicator in header
   const presenceSubtitle = useMemo(() => {
     if (isPartnerTyping) {
-      return <span className="text-emerald-400 italic">typing...</span>;
+      return <span className="text-emerald-400 font-medium italic">typing...</span>;
     }
     if (partnerPresence.isOnline) {
-      return <span className="text-emerald-400">online</span>;
+      return <span className="text-emerald-400 font-medium">online</span>;
     }
     if (partnerPresence.lastSeen) {
       const date = new Date(partnerPresence.lastSeen);
@@ -293,7 +328,7 @@ export default function ChatPage() {
       }
       return <span className="text-[#888888]">last seen {formatDate(partnerPresence.lastSeen, 'short')} at {timeStr}</span>;
     }
-    return <span className="text-[#777777]">offline</span>;
+    return <span className="text-[#666666]">offline</span>;
   }, [isPartnerTyping, partnerPresence]);
 
   const pinnedMessages = messages.filter(m => m.isPinned);
@@ -319,9 +354,17 @@ export default function ChatPage() {
               )}
             </div>
             <div>
-              <h2 className="font-serif text-sm sm:text-base font-medium text-white">
-                {partner.name} <span className="text-xs text-[#777777] font-normal">({partner.nickname})</span>
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="font-serif text-sm sm:text-base font-medium text-white">
+                  {partner.name} <span className="text-xs text-[#777777] font-normal">({partner.nickname})</span>
+                </h2>
+                {!isSocketConnected && (
+                  <span className="flex items-center gap-1 text-[10px] font-mono text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20" title="Reconnecting to real-time socket...">
+                    <WifiOff className="h-2.5 w-2.5" />
+                    Connecting
+                  </span>
+                )}
+              </div>
               <p className="text-[11px] font-mono leading-none mt-0.5">
                 {presenceSubtitle}
               </p>
@@ -422,9 +465,6 @@ export default function ChatPage() {
                 <div className="flex flex-col items-start space-y-1 max-w-xs">
                   <Skeleton className="h-16 w-64 rounded-2xl rounded-bl-sm" />
                 </div>
-                <div className="flex flex-col items-end space-y-1 ml-auto max-w-xs">
-                  <Skeleton className="h-10 w-40 rounded-2xl rounded-br-sm" />
-                </div>
               </div>
             ) : filteredMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
@@ -440,137 +480,223 @@ export default function ChatPage() {
               filteredMessages.map((msg) => {
                 const isMe = msg.senderId === user.id;
 
-              return (
-                <motion.div
-                  key={msg.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className={`group relative flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
-                >
-                  {/* Reply context if exists */}
-                  {msg.replyToContent && (
-                    <div className={`mb-1 max-w-sm rounded-xl bg-black/60 border border-white/15 px-3 py-1 text-[11px] text-[#AAAAAA] backdrop-blur-sm ${isMe ? 'mr-2' : 'ml-2'}`}>
-                      <span className="font-semibold text-white">{msg.replyToSenderName}:</span> {msg.replyToContent}
-                    </div>
-                  )}
+                return (
+                  <motion.div
+                    key={msg.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className={`group relative flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                  >
+                    {/* Reply context if exists */}
+                    {msg.replyToContent && (
+                      <div className={`mb-1 max-w-sm rounded-xl bg-black/60 border border-white/15 px-3 py-1 text-[11px] text-[#AAAAAA] backdrop-blur-sm ${isMe ? 'mr-2' : 'ml-2'}`}>
+                        <span className="font-semibold text-white">{msg.replyToSenderName}:</span> {msg.replyToContent}
+                      </div>
+                    )}
 
-                  <div className="relative flex items-end gap-1.5 group max-w-[85%] sm:max-w-md">
-                    {/* Action triggers for hovering message */}
-                    <div className={`absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex items-center gap-1 z-20 ${
-                      isMe ? 'right-full mr-1.5' : 'left-full ml-1.5'
-                    }`}>
-                      <button
-                        onClick={() => setReplyMessage(msg)}
-                        className="p-1 rounded-full bg-[#181818] border border-white/10 text-[#AAAAAA] hover:text-white"
-                        title="Reply"
-                      >
-                        <Reply className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={() => handleTogglePin(msg.id)}
-                        className={`p-1 rounded-full border transition-colors ${
-                          msg.isPinned ? 'bg-white text-black border-white' : 'bg-[#181818] border-white/10 text-[#AAAAAA] hover:text-white'
-                        }`}
-                        title="Pin message"
-                      >
-                        <Pin className="h-3 w-3" />
-                      </button>
-                      {isMe && (
-                        <button
-                          onClick={() => handleDeleteMessage(msg.id)}
-                          className="p-1 rounded-full bg-[#181818] border border-white/10 text-[#AAAAAA] hover:text-red-400"
-                          title="Delete message"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Chat Bubble */}
-                    <div
-                      className={`relative rounded-2xl px-4 py-2.5 text-xs sm:text-sm shadow-md backdrop-blur-md transition-all ${
-                        isMe
-                          ? 'bg-white text-black rounded-tr-none border border-white/90 shadow-[0_4px_12px_rgba(255,255,255,0.15)]'
-                          : 'bg-[#181818]/95 text-white rounded-tl-none border border-white/15 shadow-[0_4px_12px_rgba(0,0,0,0.5)]'
-                      }`}
-                    >
-                      {/* Attached Media */}
-                      {msg.attachments && msg.attachments.length > 0 && (
-                        <div className="mb-2 space-y-2">
-                          {msg.attachments.map(att => (
-                            <div key={att.id} className="overflow-hidden rounded-xl">
-                              {att.type === 'image' && (
-                                <img
-                                  src={att.url}
-                                  alt="attachment"
-                                  onClick={() => openMediaViewer([att.url])}
-                                  className="max-h-60 w-full object-cover cursor-pointer rounded-xl hover:opacity-95 transition-opacity"
-                                />
-                              )}
-                              {att.type === 'audio' && (
-                                <div className={`flex items-center gap-3 p-2 rounded-xl ${isMe ? 'bg-black/10' : 'bg-white/10'}`}>
-                                  <button
-                                    onClick={() => {
-                                      setActivePlayingVoiceId(activePlayingVoiceId === att.id ? null : att.id);
-                                    }}
-                                    className={`h-8 w-8 rounded-full flex items-center justify-center ${isMe ? 'bg-black text-white' : 'bg-white text-black'}`}
-                                  >
-                                    {activePlayingVoiceId === att.id ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 ml-0.5" />}
-                                  </button>
-                                  <div className="flex-1">
-                                    <div className="h-1 bg-current opacity-30 rounded-full w-28" />
-                                    <span className="text-[10px] font-mono mt-1 block opacity-70">
-                                      {att.duration ? `0:${att.duration}` : '0:18'}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Content */}
-                      {msg.content && (
-                        <p className="leading-relaxed whitespace-pre-wrap break-words font-light">
-                          {msg.content}
-                        </p>
-                      )}
-
-                      {/* Metadata row */}
-                      <div className={`mt-1 flex items-center justify-end gap-1.5 text-[10px] font-mono ${
-                        isMe ? 'text-[#555555]' : 'text-[#888888]'
+                    <div className="relative flex items-end gap-1.5 group max-w-[88%] sm:max-w-md">
+                      {/* Action triggers for hovering message */}
+                      <div className={`absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex items-center gap-1 z-20 ${
+                        isMe ? 'right-full mr-1.5' : 'left-full ml-1.5'
                       }`}>
-                        {msg.isPinned && <Pin className="h-2.5 w-2.5" />}
-                        {msg.isEdited && <span>edited</span>}
-                        <span>{formatTime(msg.createdAt)}</span>
+                        <button
+                          onClick={() => setReplyMessage(msg)}
+                          className="p-1 rounded-full bg-[#181818] border border-white/10 text-[#AAAAAA] hover:text-white"
+                          title="Reply"
+                        >
+                          <Reply className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={() => handleTogglePin(msg.id)}
+                          className={`p-1 rounded-full border transition-colors ${
+                            msg.isPinned ? 'bg-white text-black border-white' : 'bg-[#181818] border-white/10 text-[#AAAAAA] hover:text-white'
+                          }`}
+                          title="Pin message"
+                        >
+                          <Pin className="h-3 w-3" />
+                        </button>
                         {isMe && (
-                          <span>
-                            {msg.isRead ? (
-                              <CheckCheck className="h-3 w-3 text-blue-500" />
-                            ) : (
-                              <Check className="h-3 w-3" />
-                            )}
-                          </span>
+                          <button
+                            onClick={() => handleDeleteMessage(msg.id)}
+                            className="p-1 rounded-full bg-[#181818] border border-white/10 text-[#AAAAAA] hover:text-red-400"
+                            title="Delete message"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
                         )}
                       </div>
 
-                      {/* Quick Reactions Bar below message */}
-                      {msg.reactions && msg.reactions.length > 0 && (
-                        <div className="absolute -bottom-3 right-2 flex items-center gap-1 bg-[#222222] border border-white/20 rounded-full px-1.5 py-0.5 shadow-md">
-                          {msg.reactions.map((r, i) => (
-                            <span key={i} className="text-xs cursor-pointer hover:scale-125 transition-transform" onClick={() => handleToggleReaction(msg.id, r.emoji)}>
-                              {r.emoji}
+                      {/* WhatsApp-Style Chat Bubble with Natural Wrapping */}
+                      <div
+                        className={`relative rounded-2xl px-4 py-2.5 text-xs sm:text-sm shadow-md backdrop-blur-md transition-all max-w-full overflow-hidden ${
+                          isMe
+                            ? 'bg-white text-black rounded-tr-none border border-white/90 shadow-[0_4px_12px_rgba(255,255,255,0.12)]'
+                            : 'bg-[#181818]/95 text-white rounded-tl-none border border-white/15 shadow-[0_4px_12px_rgba(0,0,0,0.5)]'
+                        }`}
+                      >
+                        {/* Attached Media (Image / Playable Video / Voice) */}
+                        {msg.attachments && msg.attachments.length > 0 && (
+                          <div className="mb-2 space-y-2">
+                            {msg.attachments.map(att => (
+                              <div key={att.id} className="overflow-hidden rounded-xl">
+                                {/* Image Display & Download */}
+                                {att.type === 'image' && (
+                                  <div className="relative group/media overflow-hidden rounded-xl">
+                                    <img
+                                      src={att.url}
+                                      alt="attachment"
+                                      onClick={() => openMediaViewer([att.url])}
+                                      className="max-h-72 w-auto max-w-full object-cover cursor-pointer rounded-xl hover:opacity-95 transition-opacity"
+                                    />
+                                    <div className="absolute top-2 right-2 opacity-0 group-hover/media:opacity-100 transition-opacity">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const dateStr = new Date(msg.createdAt).toISOString().split('T')[0];
+                                          handleDownloadMedia(att.url, `Ray-Chat-Photo-${dateStr}.jpg`);
+                                        }}
+                                        title="Download original photo"
+                                        className="p-1.5 rounded-full bg-black/75 backdrop-blur-md text-white border border-white/20 hover:scale-110 active:scale-95 transition-transform"
+                                      >
+                                        <Download className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Native Playable Video Display & Download */}
+                                {att.type === 'video' && (
+                                  <div className="relative group/media overflow-hidden rounded-xl bg-black border border-white/10">
+                                    <video
+                                      src={att.url}
+                                      controls
+                                      playsInline
+                                      preload="metadata"
+                                      className="max-h-72 w-full rounded-xl object-contain bg-black"
+                                    />
+                                    <div className="absolute top-2 right-2 opacity-0 group-hover/media:opacity-100 transition-opacity">
+                                      <button
+                                        onClick={() => {
+                                          const dateStr = new Date(msg.createdAt).toISOString().split('T')[0];
+                                          handleDownloadMedia(att.url, `Ray-Chat-Video-${dateStr}.mp4`);
+                                        }}
+                                        title="Download original video"
+                                        className="p-1.5 rounded-full bg-black/75 backdrop-blur-md text-white border border-white/20 hover:scale-110 active:scale-95 transition-transform"
+                                      >
+                                        <Download className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Voice note playback */}
+                                {att.type === 'audio' && (
+                                  <div className={`flex items-center gap-3 p-2 rounded-xl ${isMe ? 'bg-black/10' : 'bg-white/10'}`}>
+                                    <button
+                                      onClick={() => {
+                                        setActivePlayingVoiceId(activePlayingVoiceId === att.id ? null : att.id);
+                                      }}
+                                      className={`h-8 w-8 rounded-full flex items-center justify-center ${isMe ? 'bg-black text-white' : 'bg-white text-black'}`}
+                                    >
+                                      {activePlayingVoiceId === att.id ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 ml-0.5" />}
+                                    </button>
+                                    <div className="flex-1">
+                                      <div className="h-1 bg-current opacity-30 rounded-full w-28" />
+                                      <span className="text-[10px] font-mono mt-1 block opacity-70">
+                                        {att.duration ? `0:${att.duration}` : '0:18'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Content with natural wrapping */}
+                        {msg.content && (
+                          <p className="leading-relaxed whitespace-pre-wrap break-words font-light">
+                            {msg.content}
+                          </p>
+                        )}
+
+                        {/* Metadata row with real WhatsApp delivery ticks */}
+                        <div className={`mt-1 flex items-center justify-end gap-1.5 text-[10px] font-mono select-none ${
+                          isMe ? 'text-[#555555]' : 'text-[#888888]'
+                        }`}>
+                          {msg.isPinned && <Pin className="h-2.5 w-2.5" />}
+                          {msg.isEdited && <span>edited</span>}
+                          <span>{formatTime(msg.createdAt)}</span>
+
+                          {/* WhatsApp Status Indicators for Outgoing Messages */}
+                          {isMe && (
+                            <span className="flex items-center ml-0.5">
+                              {msg.status === 'sending' ? (
+                                <span className="h-2.5 w-2.5 rounded-full border border-current border-t-transparent animate-spin inline-block opacity-70" title="Sending message..." />
+                              ) : msg.status === 'failed' ? (
+                                <button
+                                  onClick={() => chatService.retryMessage(msg.id)}
+                                  className="text-red-500 hover:text-red-400 flex items-center gap-1"
+                                  title="Message failed to send. Click to retry."
+                                >
+                                  <AlertCircle className="h-3 w-3" />
+                                  <span className="text-[9px] underline">Retry</span>
+                                </button>
+                              ) : msg.status === 'read' || msg.isRead ? (
+                                <span title={`Read ${msg.readAt ? formatTime(msg.readAt) : ''}`}>
+                                  <CheckCheck className="h-3.5 w-3.5 text-sky-400" />
+                                </span>
+                              ) : msg.status === 'delivered' || msg.isDelivered ? (
+                                <span title={`Delivered ${msg.deliveredAt ? formatTime(msg.deliveredAt) : ''}`}>
+                                  <CheckCheck className="h-3.5 w-3.5 text-[#888888]" />
+                                </span>
+                              ) : (
+                                <span title="Sent to server">
+                                  <Check className="h-3.5 w-3.5 text-[#888888]" />
+                                </span>
+                              )}
                             </span>
-                          ))}
+                          )}
                         </div>
-                      )}
+
+                        {/* Quick Reactions Bar below message */}
+                        {msg.reactions && msg.reactions.length > 0 && (
+                          <div className="absolute -bottom-3 right-2 flex items-center gap-1 bg-[#222222] border border-white/20 rounded-full px-1.5 py-0.5 shadow-md">
+                            {msg.reactions.map((r, i) => (
+                              <span key={i} className="text-xs cursor-pointer hover:scale-125 transition-transform" onClick={() => handleToggleReaction(msg.id, r.emoji)}>
+                                {r.emoji}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              );
-            }))}
+                  </motion.div>
+                );
+              })
+            )}
+
+            {/* Real-time Partner Typing Bubble in Chat Area */}
+            {isPartnerTyping && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 5 }}
+                className="flex items-center gap-2 max-w-xs"
+              >
+                <div className="h-7 w-7 rounded-full overflow-hidden border border-white/20 shrink-0">
+                  <img src={partner.avatar} alt={partner.name} className="h-full w-full object-cover" />
+                </div>
+                <div className="rounded-2xl rounded-tl-none bg-[#181818]/90 border border-white/10 px-3.5 py-2 flex items-center gap-1.5 shadow-md">
+                  <span className="w-1.5 h-1.5 bg-white/70 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-1.5 h-1.5 bg-white/70 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-1.5 h-1.5 bg-white/70 rounded-full animate-bounce" />
+                  <span className="text-[11px] font-mono text-[#888888] ml-1.5 italic">typing...</span>
+                </div>
+              </motion.div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
         </div>
@@ -593,12 +719,38 @@ export default function ChatPage() {
           </div>
         )}
 
+        {/* Upload in-progress indicator */}
+        {isUploadingMedia && (
+          <div className="flex items-center gap-2 bg-[#141414] px-4 py-2 border-t border-white/10 text-xs text-white z-20">
+            <Loader2 className="h-4 w-4 animate-spin text-white" />
+            <span>Uploading media to secure sanctuary storage...</span>
+          </div>
+        )}
+
+        {/* Upload error banner */}
+        {mediaUploadError && (
+          <div className="flex items-center justify-between bg-red-950/80 border-t border-red-500/30 px-4 py-2 text-xs text-red-200 z-20">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-red-400" />
+              <span>{mediaUploadError}</span>
+            </div>
+            <button onClick={() => setMediaUploadError(null)} className="p-1 hover:text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         {/* Attachment preview if selected */}
         {activeAttachment && (
           <div className="flex items-center justify-between bg-[#121212] px-4 py-2 border-t border-white/10 text-xs text-white z-20">
-            <div className="flex items-center gap-3">
-              <ImageIcon className="h-4 w-4 text-white" />
-              <span>{activeAttachment.name}</span>
+            <div className="flex items-center gap-3 min-w-0">
+              {activeAttachment.type === 'image' ? (
+                <img src={activeAttachment.url} alt="preview" className="h-8 w-8 rounded-lg object-cover border border-white/20 shrink-0" />
+              ) : (
+                <ImageIcon className="h-4 w-4 text-white shrink-0" />
+              )}
+              <span className="truncate">{activeAttachment.name}</span>
+              <span className="text-[10px] font-mono text-[#777777] shrink-0">({activeAttachment.size})</span>
             </div>
             <button onClick={() => setActiveAttachment(null)} className="p-1 hover:text-red-400">
               <X className="h-4 w-4" />
@@ -620,10 +772,30 @@ export default function ChatPage() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              aria-label="Attach Media"
+              aria-label="Attach File"
+              title="Attach photo or video"
               className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full bg-[#141414] border border-white/10 text-[#AAAAAA] hover:text-white transition-colors"
             >
               <Paperclip className="h-4 w-4" />
+            </button>
+
+            {/* Mobile Camera Input */}
+            <input
+              type="file"
+              ref={cameraInputRef}
+              onChange={handleFileUpload}
+              className="hidden"
+              accept="image/*"
+              capture="environment"
+            />
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              aria-label="Take Photo"
+              title="Take Photo with Camera"
+              className="flex sm:hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#141414] border border-white/10 text-[#AAAAAA] hover:text-white transition-colors"
+            >
+              <Camera className="h-4 w-4" />
             </button>
 
             {/* Emoji Trigger */}
@@ -664,9 +836,9 @@ export default function ChatPage() {
             {/* Send Button */}
             <button
               type="submit"
-              disabled={!inputText.trim() && !activeAttachment}
+              disabled={(!inputText.trim() && !activeAttachment) || isUploadingMedia}
               className={`clay-btn h-9 sm:h-11 px-3 sm:px-5 shrink-0 rounded-full flex items-center justify-center transition-all ${
-                inputText.trim() || activeAttachment
+                (inputText.trim() || activeAttachment) && !isUploadingMedia
                   ? 'clay-btn-primary'
                   : 'bg-[#141414] border border-white/5 text-[#444444] cursor-not-allowed'
               }`}
@@ -705,11 +877,10 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Right Info Drawer (Desktop side panel & Mobile overlay) */}
+      {/* Right Info Drawer */}
       <AnimatePresence>
         {showRightInfo && (
           <>
-            {/* Mobile backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

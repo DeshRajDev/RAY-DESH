@@ -7,12 +7,20 @@ import { corsOptions } from '../config/cors';
 import { logger } from '../utils/logger';
 import { registerChatHandlers } from './chat.handler';
 
+let ioInstance: Server | null = null;
+
+export function getSocketIo(): Server | null {
+  return ioInstance;
+}
+
 export function initializeSockets(server: HttpServer): Server {
   const io = new Server(server, {
     cors: corsOptions,
     pingTimeout: 30000,
     pingInterval: 25000,
   });
+
+  ioInstance = io;
 
   // Socket Authentication Handshake Middleware
   io.use(async (socket: Socket, next: (err?: any) => void) => {

@@ -423,19 +423,145 @@ class MusicService {
     return { success: true, data: fallbackSong };
   }
 
-  public async toggleFavorite(id: string): Promise<ApiResponse<Song>> {
+  public isFavoriteTrack(idOrVideoId?: string): boolean {
+    if (!idOrVideoId) return false;
+    return this.songs.some(
+      (s) =>
+        (s.id === idOrVideoId || s.providerTrackId === idOrVideoId || s.id === `youtube_${idOrVideoId}`) &&
+        s.isFavorite
+    );
+  }
+
+  public async getFavoriteSongs(): Promise<ApiResponse<Song[]>> {
     try {
-      await ApiClient.post(`/music/${id}/favorite`);
+      const res = await ApiClient.get<ApiResponse<any[]>>('/music/favorites');
+      if (res && res.success && Array.isArray(res.data)) {
+        const formatted: Song[] = res.data.map((item) => ({
+          id: item.id || item._id,
+          title: item.title,
+          artist: item.artist,
+          album: item.album || '',
+          duration: item.duration || 180,
+          coverUrl: item.coverUrl,
+          audioUrl: item.audioUrl,
+          addedById: item.addedById,
+          addedByName: item.addedByName || 'Sanctuary',
+          dateAdded: item.createdAt || new Date().toISOString(),
+          isFavorite: true,
+          category: (item.category as Song['category']) || 'Our Songs',
+          lyricsSnippet: item.lyricsSnippet,
+          note: item.note,
+          provider: item.provider,
+          providerTrackId: item.providerTrackId,
+          licenseUrl: item.licenseUrl,
+          shareUrl: item.shareUrl,
+        }));
+        return { success: true, data: formatted };
+      }
     } catch (err) {
-      console.warn('[MusicService] Backend toggle favorite fallback:', err);
+      console.warn('[MusicService] Failed to load favorites from backend:', err);
+    }
+    return { success: true, data: this.songs.filter((s) => s.isFavorite) };
+  }
+
+  public async toggleFavorite(
+    trackOrId:
+      | string
+      | {
+          id?: string;
+          providerTrackId?: string;
+          title?: string;
+          artist?: string;
+          coverUrl?: string;
+          duration?: number;
+          provider?: string;
+          shareUrl?: string;
+        }
+  ): Promise<ApiResponse<Song>> {
+    const payload =
+      typeof trackOrId === 'string'
+        ? { songId: trackOrId }
+        : {
+            songId: trackOrId.id?.startsWith('youtube_') ? undefined : trackOrId.id,
+            providerTrackId: trackOrId.providerTrackId || (trackOrId.id?.startsWith('youtube_') ? trackOrId.id.replace('youtube_', '') : undefined),
+            title: trackOrId.title,
+            artist: trackOrId.artist,
+            coverUrl: trackOrId.coverUrl,
+            duration: trackOrId.duration,
+            provider: trackOrId.provider || 'youtube',
+            shareUrl: trackOrId.shareUrl,
+          };
+
+    try {
+      const res = await ApiClient.post<ApiResponse<any>>('/music/favorite-toggle', payload);
+      if (res && res.success && res.data) {
+        const serverSong = res.data;
+        const normalizedSong: Song = {
+          id: serverSong.id || serverSong._id,
+          title: serverSong.title,
+          artist: serverSong.artist,
+          album: serverSong.album || '',
+          duration: serverSong.duration || 180,
+          coverUrl: serverSong.coverUrl,
+          audioUrl: serverSong.audioUrl,
+          addedById: serverSong.addedById,
+          addedByName: serverSong.addedByName || 'Sanctuary',
+          dateAdded: serverSong.createdAt || new Date().toISOString(),
+          isFavorite: !!serverSong.isFavorite,
+          category: (serverSong.category as Song['category']) || 'Our Songs',
+          lyricsSnippet: serverSong.lyricsSnippet,
+          note: serverSong.note,
+          provider: serverSong.provider,
+          providerTrackId: serverSong.providerTrackId,
+          licenseUrl: serverSong.licenseUrl,
+          shareUrl: serverSong.shareUrl,
+        };
+
+        const existingIdx = this.songs.findIndex(
+          (s) =>
+            s.id === normalizedSong.id ||
+            (normalizedSong.providerTrackId && s.providerTrackId === normalizedSong.providerTrackId) ||
+            s.id === `youtube_${normalizedSong.providerTrackId}`
+        );
+
+        if (existingIdx > -1) {
+          this.songs[existingIdx] = normalizedSong;
+        } else {
+          this.songs.unshift(normalizedSong);
+        }
+
+        if (
+          this.currentSong &&
+          (this.currentSong.id === normalizedSong.id ||
+            (normalizedSong.providerTrackId && this.currentSong.providerTrackId === normalizedSong.providerTrackId) ||
+            this.currentSong.id === `youtube_${normalizedSong.providerTrackId}`)
+        ) {
+          this.currentSong.isFavorite = normalizedSong.isFavorite;
+        }
+
+        this.saveSongs();
+        this.notify();
+        this.notifyPlayer();
+        return { success: true, data: normalizedSong };
+      }
+    } catch (err) {
+      console.warn('[MusicService] Backend toggle favorite failed, falling back locally:', err);
     }
 
-    const s = this.songs.find(item => item.id === id);
-    if (!s) throw new Error('Song not found');
-    s.isFavorite = !s.isFavorite;
-    this.saveSongs();
-    this.notify();
-    return { success: true, data: { ...s } };
+    const songId = typeof trackOrId === 'string' ? trackOrId : trackOrId.id;
+    const s = this.songs.find((item) => item.id === songId);
+    if (s) {
+      s.isFavorite = !s.isFavorite;
+      if (this.currentSong && this.currentSong.id === s.id) {
+        this.currentSong.isFavorite = s.isFavorite;
+      }
+      this.saveSongs();
+      this.notify();
+      this.notifyPlayer();
+      return { success: true, data: { ...s } };
+    }
+
+    throw new Error('Track could not be favorited');
   }
 
   public async deleteSong(id: string): Promise<ApiResponse<boolean>> {
@@ -444,7 +570,7 @@ class MusicService {
     } catch (err) {
       console.warn('[MusicService] Failed to delete song on backend:', err);
     }
-    this.songs = this.songs.filter(s => s.id !== id);
+    this.songs = this.songs.filter((s) => s.id !== id);
     this.saveSongs();
     this.notify();
     return { success: true, data: true };

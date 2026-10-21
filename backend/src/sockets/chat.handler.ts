@@ -11,6 +11,26 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
 
   const roomName = `couple:${couple.id}`;
 
+  // Automatically mark pending undelivered messages as delivered now that recipient is online
+  Message.find({ coupleId: couple.id, receiverId: user.id, isDelivered: false })
+    .select('_id')
+    .then(async (pending: any[]) => {
+      if (pending && pending.length > 0) {
+        const ids = pending.map((p: any) => p._id.toString());
+        const now = new Date();
+        await Message.updateMany(
+          { _id: { $in: ids } },
+          { isDelivered: true, status: 'delivered', deliveredAt: now }
+        );
+        socket.to(roomName).emit('message:status', {
+          messageIds: ids,
+          status: 'delivered',
+          deliveredAt: now.toISOString(),
+        });
+      }
+    })
+    .catch((err: any) => logger.error({ err }, 'Failed to mark pending messages as delivered'));
+
   // 1. Send Message
   socket.on('message:send', async (data: any, callback?: any) => {
     try {
@@ -48,7 +68,8 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
         isPinned: false,
         isFavorite: false,
         isRead: false,
-        isDelivered: true,
+        isDelivered: false,
+        status: 'sent',
         idempotencyKey,
       });
 
@@ -68,7 +89,54 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
     }
   });
 
-  // 2. Typing indicators
+  // 2. Delivery Acknowledgement (Single tick -> Double grey ticks)
+  socket.on('message:delivered', async (data: { messageIds?: string[]; messageId?: string }) => {
+    try {
+      const ids = data.messageIds || (data.messageId ? [data.messageId] : []);
+      if (!ids.length) return;
+      const now = new Date();
+      await Message.updateMany(
+        { _id: { $in: ids }, coupleId: couple.id, receiverId: user.id, isDelivered: false },
+        { isDelivered: true, status: 'delivered', deliveredAt: now }
+      );
+      socket.to(roomName).emit('message:status', {
+        messageIds: ids,
+        status: 'delivered',
+        deliveredAt: now.toISOString(),
+      });
+    } catch (err) {
+      logger.error({ err }, 'Socket message:delivered error');
+    }
+  });
+
+  // 3. Read Receipts (Double grey ticks -> Double blue ticks)
+  socket.on('message:read', async (data?: { messageIds?: string[]; messageId?: string }) => {
+    try {
+      const ids = data?.messageIds || (data?.messageId ? [data.messageId] : []);
+      const query: any = { coupleId: couple.id, receiverId: user.id, isRead: false };
+      if (ids && ids.length > 0) {
+        query._id = { $in: ids };
+      }
+      const now = new Date();
+      await Message.updateMany(query, {
+        isRead: true,
+        isDelivered: true,
+        status: 'read',
+        readAt: now,
+      });
+      socket.to(roomName).emit('message:status', {
+        messageIds: ids,
+        status: 'read',
+        readAt: now.toISOString(),
+        readerId: user.id,
+      });
+      socket.to(roomName).emit('message:read', { readerId: user.id, messageIds: ids });
+    } catch (err) {
+      logger.error({ err }, 'Socket mark read error');
+    }
+  });
+
+  // 4. Typing indicators
   socket.on('typing:start', () => {
     socket.to(roomName).emit('typing:start', { userId: user.id, userName: user.name });
   });
@@ -77,14 +145,16 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
     socket.to(roomName).emit('typing:stop', { userId: user.id });
   });
 
-  // 3. Reactions
+  // 5. Reactions
   socket.on('message:reaction', async (data: any) => {
     try {
       const { messageId, emoji } = data;
       const message = await Message.findOne({ _id: messageId, coupleId: couple.id });
       if (!message) return;
 
-      const existingIndex = message.reactions.findIndex((r: any) => r.userId.toString() === user.id && r.emoji === emoji);
+      const existingIndex = message.reactions.findIndex(
+        (r: any) => r.userId.toString() === user.id && r.emoji === emoji
+      );
 
       if (existingIndex > -1) {
         message.reactions.splice(existingIndex, 1);
@@ -101,19 +171,6 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
       io.to(roomName).emit('message:reaction', message.toJSON());
     } catch (err) {
       logger.error({ err }, 'Socket reaction error');
-    }
-  });
-
-  // 4. Read receipts
-  socket.on('message:read', async () => {
-    try {
-      await Message.updateMany(
-        { coupleId: couple.id, receiverId: user.id, isRead: false },
-        { isRead: true }
-      );
-      socket.to(roomName).emit('message:read', { readerId: user.id });
-    } catch (err) {
-      logger.error({ err }, 'Socket mark read error');
     }
   });
 }

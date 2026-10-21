@@ -14,31 +14,45 @@ import {
   Camera, 
   CheckSquare, 
   LogOut, 
-  Upload, 
+  Upload,
   ShieldCheck, 
-  Key 
+  Key,
+  Play
 } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
 import { formatDate } from '@/lib/date-utils';
 import { memoryService } from '@/services/memory.service';
 import { musicService } from '@/services/music.service';
 import { bucketListService } from '@/services/bucketList.service';
+import { Song } from '@/types';
 import { Modal } from '@/components/ui/modal';
 
 export default function ProfilePage() {
-  const { user, partner, couple, logout, updateUserProfile, triggerHeartEffect } = useApp();
+  const { user, partner, couple, logout, updateUserProfile, triggerHeartEffect, playSong } = useApp();
   const [activeProfileTab, setActiveProfileTab] = useState<'me' | 'partner'>('me');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [memoriesCount, setMemoriesCount] = useState<number>(0);
   const [songsCount, setSongsCount] = useState<number>(0);
   const [bucketDone, setBucketDone] = useState<number>(0);
+  const [favoriteSongs, setFavoriteSongs] = useState<Song[]>([]);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     memoryService.getMemories().then(res => setMemoriesCount(res.data?.length ?? 0));
     musicService.getSongs().then(res => setSongsCount(res.data?.length ?? 0));
+    musicService.getFavoriteSongs().then(res => setFavoriteSongs(res.data ?? []));
     bucketListService.getItems().then(res => setBucketDone(res.data?.filter(b => b.isCompleted).length ?? 0));
   }, []);
+
+  const handleUnfavoriteSong = async (song: Song) => {
+    try {
+      await musicService.toggleFavorite(song);
+      setFavoriteSongs(prev => prev.filter(s => s.id !== song.id));
+      triggerHeartEffect();
+    } catch (err) {
+      console.warn('Failed to unfavorite song:', err);
+    }
+  };
 
   const currentViewUser = activeProfileTab === 'me' ? user : partner;
 
@@ -269,6 +283,62 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Music Favorites Section */}
+        <div className="space-y-4 pt-4 border-t border-white/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-serif text-lg text-white">Our Music Favorites</h3>
+              <p className="text-xs text-[#777777]">Songs saved to our private sanctuary collection</p>
+            </div>
+            <span className="text-xs font-mono text-[#888888]">{favoriteSongs.length} saved</span>
+          </div>
+
+          {favoriteSongs.length === 0 ? (
+            <div className="p-6 rounded-2xl bg-[#141414] border border-white/5 text-center space-y-2">
+              <Music className="h-6 w-6 text-[#666666] mx-auto" />
+              <p className="text-xs text-[#777777]">No favorite songs saved yet.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {favoriteSongs.map((song) => (
+                <div
+                  key={song.id}
+                  className="flex items-center justify-between p-3 rounded-2xl bg-[#141414] border border-white/5 hover:border-white/10 transition-all"
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <img
+                      src={song.coverUrl}
+                      alt={song.title}
+                      className="h-11 w-11 rounded-xl object-cover shrink-0 border border-white/10"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-serif text-xs font-normal text-white truncate">{song.title}</h4>
+                      <p className="text-[11px] text-[#777777] truncate">{song.artist}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0 pl-2">
+                    <button
+                      onClick={() => handleUnfavoriteSong(song)}
+                      className="p-1.5 rounded-full text-red-500 hover:bg-white/10 transition-colors"
+                      title="Remove from favorites"
+                    >
+                      <Heart className="h-3.5 w-3.5 fill-red-500 text-red-500" />
+                    </button>
+                    <button
+                      onClick={() => playSong(song)}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-black hover:scale-105 active:scale-95 transition-transform"
+                      title="Play track"
+                    >
+                      <Play className="h-3 w-3 fill-black ml-0.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

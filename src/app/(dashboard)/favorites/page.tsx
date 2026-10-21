@@ -9,6 +9,7 @@ import { formatDate } from '@/lib/date-utils';
 import { EmptyState } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Memory, Song, Message, Place } from '@/types';
+import { musicService } from '@/services/music.service';
 
 const FAVORITE_TABS = [
   'Favorite Memories',
@@ -21,7 +22,7 @@ const FAVORITE_TABS = [
 type FavoriteTab = typeof FAVORITE_TABS[number];
 
 export default function FavoritesPage() {
-  const { user, partner, openMediaViewer, playSong } = useApp();
+  const { user, partner, openMediaViewer, playSong, triggerHeartEffect } = useApp();
   const [activeTab, setActiveTab] = useState<FavoriteTab>('Favorite Memories');
   const [favoriteMemories, setFavoriteMemories] = useState<Memory[]>([]);
   const [favoriteSongs, setFavoriteSongs] = useState<Song[]>([]);
@@ -29,15 +30,32 @@ export default function FavoritesPage() {
   const [favoritePlaces, setFavoritePlaces] = useState<Place[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const handleRemoveFavoriteSong = async (song: Song) => {
+    try {
+      await musicService.toggleFavorite(song);
+      setFavoriteSongs(prev => prev.filter(s => s.id !== song.id));
+      triggerHeartEffect();
+    } catch (err) {
+      console.warn('Failed to remove favorite:', err);
+    }
+  };
+
   useEffect(() => {
     setIsLoading(true);
-    ApiClient.get<{ success: boolean; data: { memories: Memory[]; songs: Song[]; messages: Message[]; places: Place[] } }>('/favorites')
-      .then(res => {
-        if (res && res.data) {
-          setFavoriteMemories(Array.isArray(res.data.memories) ? res.data.memories : []);
-          setFavoriteSongs(Array.isArray(res.data.songs) ? res.data.songs : []);
-          setFavoriteMessages(Array.isArray(res.data.messages) ? res.data.messages : []);
-          setFavoritePlaces(Array.isArray(res.data.places) ? res.data.places : []);
+    Promise.all([
+      ApiClient.get<{ success: boolean; data: { memories: Memory[]; songs: Song[]; messages: Message[]; places: Place[] } }>('/favorites'),
+      musicService.getFavoriteSongs()
+    ])
+      .then(([favRes, songRes]) => {
+        if (favRes && favRes.data) {
+          setFavoriteMemories(Array.isArray(favRes.data.memories) ? favRes.data.memories : []);
+          setFavoriteMessages(Array.isArray(favRes.data.messages) ? favRes.data.messages : []);
+          setFavoritePlaces(Array.isArray(favRes.data.places) ? favRes.data.places : []);
+        }
+        if (songRes && Array.isArray(songRes.data)) {
+          setFavoriteSongs(songRes.data);
+        } else if (favRes?.data?.songs) {
+          setFavoriteSongs(favRes.data.songs);
         }
         setIsLoading(false);
       })
@@ -171,12 +189,22 @@ export default function FavoritesPage() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => playSong(song)}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-black hover:scale-105 active:scale-95 transition-transform"
-                  >
-                    <Play className="h-4 w-4 fill-black ml-0.5" />
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleRemoveFavoriteSong(song)}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#181818] border border-white/10 text-red-500 hover:bg-white/10 transition-colors"
+                      title="Remove from favorites"
+                    >
+                      <Heart className="h-4 w-4 fill-red-500 text-red-500" />
+                    </button>
+                    <button
+                      onClick={() => playSong(song)}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-black hover:scale-105 active:scale-95 transition-transform"
+                      title="Play song in player"
+                    >
+                      <Play className="h-4 w-4 fill-black ml-0.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

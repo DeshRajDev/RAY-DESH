@@ -7,9 +7,10 @@ import {
   Music,
   Play,
   Pause,
+  SkipBack,
+  SkipForward,
   Heart,
   Search,
-  Sparkles,
   Download,
   CheckCircle2,
   ExternalLink,
@@ -18,13 +19,22 @@ import {
   X,
   BookmarkPlus,
   Library,
-  Flame,
-  Radio,
   Tv,
+  Maximize2,
+  Volume2,
+  VolumeX,
+  Shuffle,
+  Repeat,
+  Repeat1,
+  Loader2,
+  ListMusic,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
 import { Song, YouTubeTrack } from '@/types';
-import { musicService } from '@/services/music.service';
+import { musicService, PlayerState } from '@/services/music.service';
+import { youtubePlayerManager } from '@/lib/youtube-player';
 import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -49,6 +59,7 @@ const QUICK_DISCOVERY_TAGS = [
 ];
 
 function formatDuration(seconds: number): string {
+  if (!seconds || isNaN(seconds)) return '0:00';
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
@@ -67,7 +78,7 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
 }
 
 export default function MusicPage() {
-  const { user, partner, currentSong, isPlaying, playSong, togglePlay, triggerHeartEffect } = useApp();
+  const { user, partner, currentSong, isPlaying, playSong, togglePlay, playNextSong, playPrevSong, triggerHeartEffect } = useApp();
 
   // Navigation tabs: Sanctuary Playlist vs. YouTube Explorer
   const [activeTab, setActiveTab] = useState<'sanctuary' | 'youtube'>('sanctuary');
@@ -85,6 +96,11 @@ export default function MusicPage() {
   const [youtubeError, setYoutubeError] = useState<{ code: string; message: string } | null>(null);
   const latestRequestId = useRef(0);
 
+  // Player state
+  const [playerState, setPlayerState] = useState<PlayerState | null>(null);
+  const [isPlayerCollapsed, setIsPlayerCollapsed] = useState(false);
+  const [favoriteLoadingId, setFavoriteLoadingId] = useState<string | null>(null);
+
   // Add Track Modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -99,6 +115,14 @@ export default function MusicPage() {
   const [saveCategory, setSaveCategory] = useState<Song['category']>('Our Songs');
   const [saveNote, setSaveNote] = useState('');
   const [isSavingTrack, setIsSavingTrack] = useState(false);
+
+  // Subscribe to Unified Player State
+  useEffect(() => {
+    const unsub = musicService.subscribePlayer((state) => {
+      setPlayerState(state);
+    });
+    return () => unsub();
+  }, []);
 
   // Load Sanctuary Songs
   const loadSanctuarySongs = useCallback(async () => {
@@ -165,6 +189,7 @@ export default function MusicPage() {
 
   // Play YouTube Track directly using unified music service
   const handlePlayYouTubeTrack = (track: YouTubeTrack) => {
+    const isFav = musicService.isFavoriteTrack(track.id);
     const virtualSong: Song = {
       id: `youtube_${track.id}`,
       title: track.title,
@@ -175,13 +200,38 @@ export default function MusicPage() {
       addedById: user.id,
       addedByName: 'YouTube Music',
       dateAdded: new Date().toISOString(),
-      isFavorite: false,
+      isFavorite: isFav,
       category: 'Our Songs',
       provider: 'youtube',
       providerTrackId: track.id,
       shareUrl: track.shareUrl,
     };
     playSong(virtualSong);
+  };
+
+  // Toggle favorite on ANY track or song with optimistic UI and backend persistence
+  const handleToggleFavorite = async (e: React.MouseEvent, trackOrSong: {
+    id?: string;
+    providerTrackId?: string;
+    title: string;
+    artist: string;
+    coverUrl?: string;
+    duration?: number;
+    provider?: string;
+    shareUrl?: string;
+  }) => {
+    e.stopPropagation();
+    const trackId = trackOrSong.id || trackOrSong.providerTrackId || '';
+    setFavoriteLoadingId(trackId);
+
+    try {
+      await musicService.toggleFavorite(trackOrSong);
+      triggerHeartEffect(e.clientX, e.clientY);
+    } catch (err) {
+      console.warn('Failed to toggle favorite:', err);
+    } finally {
+      setFavoriteLoadingId(null);
+    }
   };
 
   // Save YouTube Track to Sanctuary Database
@@ -229,24 +279,32 @@ export default function MusicPage() {
     triggerHeartEffect();
   };
 
-  const handleToggleFavorite = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    await musicService.toggleFavorite(id);
-    triggerHeartEffect();
-  };
-
   const isTrackSavedInSanctuary = (videoId: string) => {
     return songs.some(s => s.providerTrackId === videoId || s.id === `youtube_${videoId}`);
   };
 
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const pct = Math.max(0, Math.min(1, clickX / rect.width));
+    const targetSeconds = pct * (playerState?.duration || currentSong?.duration || 180);
+    musicService.seekTo(targetSeconds);
+  };
+
+  const currentProgressPercent = (playerState && playerState.duration > 0)
+    ? Math.min(100, Math.max(0, (playerState.currentTime / playerState.duration) * 100))
+    : 0;
+
+  const isCurrentFavorite = currentSong ? musicService.isFavoriteTrack(currentSong.providerTrackId || currentSong.id) : false;
+
   return (
-    <div className="mx-auto max-w-6xl px-4 sm:px-8 py-6 space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="mx-auto max-w-6xl px-3 sm:px-6 md:px-8 py-5 space-y-6 sm:space-y-8">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-xs font-mono uppercase text-[#777777] mb-1">
             <Music className="h-3.5 w-3.5 text-white" />
-            <span>Shared Audio Sanctuary</span>
+            <span>Shared Audio &amp; Video Sanctuary</span>
           </div>
           <h1 className="font-serif text-2xl sm:text-3xl font-light text-white">Our Music Collection</h1>
           <p className="text-xs sm:text-sm text-[#777777] font-light">
@@ -257,7 +315,7 @@ export default function MusicPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="clay-btn clay-btn-primary px-4 py-2.5 text-xs font-medium flex items-center gap-2"
+            className="clay-btn clay-btn-primary px-4 py-2 text-xs font-medium flex items-center gap-2"
           >
             <Plus className="h-4 w-4" />
             Add Custom Track
@@ -265,69 +323,308 @@ export default function MusicPage() {
         </div>
       </div>
 
-      {/* Hero Featured Now Playing Card */}
+      {/* =========================================================================
+          PART 1: FULL-SIZE YOUTUBE-STYLE RESPONSIVE THEATER / CINEMA PLAYER
+          ========================================================================= */}
       {currentSong && (
-        <div className="relative rounded-3xl border border-white/10 bg-gradient-to-b from-[#181818] to-[#0A0A0A] p-6 sm:p-8 shadow-xl flex flex-col md:flex-row items-center gap-6 overflow-hidden">
-          <div className="relative h-44 w-44 shrink-0 overflow-hidden rounded-3xl border border-white/15 shadow-2xl group bg-[#111]">
-            <img
-              src={currentSong.coverUrl}
-              alt={currentSong.title}
-              className="h-full w-full object-cover grayscale hover:grayscale-0 transition-all duration-500"
-            />
-            <button
-              onClick={togglePlay}
-              aria-label={isPlaying ? 'Pause' : 'Play'}
-              className="absolute inset-0 m-auto h-12 w-12 rounded-full bg-white text-black flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all"
-            >
-              {isPlaying ? (
-                <Pause className="h-5 w-5 fill-black" />
-              ) : (
-                <Play className="h-5 w-5 fill-black ml-0.5" />
-              )}
-            </button>
-          </div>
-
-          <div className="flex-1 text-center md:text-left space-y-2 min-w-0">
-            <div className="flex items-center justify-center md:justify-start gap-2 flex-wrap">
-              <span className="rounded-full bg-white/10 px-3 py-0.5 text-[10px] font-mono text-white">
-                {currentSong.category}
+        <div className="rounded-3xl border border-white/10 bg-[#0C0C0C] p-3 sm:p-6 shadow-2xl overflow-hidden transition-all duration-300">
+          <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/5">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-[11px] font-mono text-[#AAAAAA] uppercase tracking-wider">
+                {currentSong.provider === 'youtube' ? 'YouTube Cinema Player' : 'Sanctuary Audio Player'}
               </span>
-              <span className="text-xs font-mono text-[#777777]">
-                Added by {currentSong.addedByName}
-              </span>
-              {currentSong.provider === 'youtube' && (
-                <span className="rounded-full bg-red-600/20 border border-red-600/30 px-2.5 py-0.5 text-[10px] font-mono text-red-400 flex items-center gap-1">
-                  <Tv className="h-3 w-3 text-red-400" />
-                  YouTube Video
-                </span>
-              )}
             </div>
-
-            <h2 className="font-serif text-2xl sm:text-3xl text-white font-normal truncate">
-              {currentSong.title}
-            </h2>
-            <p className="text-sm text-[#AAAAAA] font-light truncate">{currentSong.artist}</p>
-
-            {currentSong.note && (
-              <p className="text-xs text-[#888888] font-light italic max-w-lg pt-1">
-                &ldquo;{currentSong.note}&rdquo;
-              </p>
-            )}
-
-            {currentSong.shareUrl && (
-              <div className="pt-1">
-                <a
-                  href={currentSong.shareUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] font-mono text-[#777777] hover:text-white inline-flex items-center gap-1 transition-colors"
-                >
-                  <span>Open on YouTube</span>
-                  <ExternalLink className="h-2.5 w-2.5" />
-                </a>
-              </div>
-            )}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setIsPlayerCollapsed(!isPlayerCollapsed)}
+                className="flex items-center gap-1 text-[11px] font-mono text-[#777777] hover:text-white px-2 py-1 rounded-lg hover:bg-white/5 transition-colors"
+                title={isPlayerCollapsed ? 'Expand Player' : 'Collapse Player'}
+              >
+                <span>{isPlayerCollapsed ? 'Expand View' : 'Collapse'}</span>
+                {isPlayerCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+              </button>
+            </div>
           </div>
+
+          {!isPlayerCollapsed && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+              {/* Left Column: 16:9 Video & Core Controls (8 cols on desktop) */}
+              <div className="lg:col-span-8 flex flex-col space-y-4">
+                {/* 16:9 YouTube Video Frame */}
+                <div className="relative aspect-video w-full rounded-2xl sm:rounded-3xl overflow-hidden bg-black border border-white/10 shadow-2xl group">
+                  {currentSong.provider === 'youtube' ? (
+                    <div id="global-youtube-player-frame" className="w-full h-full" />
+                  ) : (
+                    <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-b from-[#181818] to-[#0A0A0A]">
+                      <img
+                        src={currentSong.coverUrl}
+                        alt={currentSong.title}
+                        className="absolute inset-0 w-full h-full object-cover opacity-20 blur-xl"
+                      />
+                      <div className="relative z-10 text-center space-y-3 p-6">
+                        <img
+                          src={currentSong.coverUrl}
+                          alt={currentSong.title}
+                          className="h-32 w-32 rounded-2xl mx-auto object-cover border border-white/20 shadow-2xl"
+                        />
+                        <h3 className="font-serif text-lg text-white font-normal">{currentSong.title}</h3>
+                        <p className="text-xs text-[#888888]">{currentSong.artist}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Loading Spinner Overlay */}
+                  {playerState?.isLoading && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center pointer-events-none z-10">
+                      <div className="flex flex-col items-center gap-2 text-white">
+                        <Loader2 className="h-8 w-8 animate-spin text-white" />
+                        <span className="text-xs font-mono text-[#CCCCCC]">Buffering stream...</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Playback Error Overlay */}
+                  {playerState?.error && (
+                    <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-3 p-6 text-center z-20">
+                      <AlertCircle className="h-8 w-8 text-red-400" />
+                      <p className="text-xs text-red-200 max-w-sm">{playerState.error}</p>
+                      <button
+                        onClick={() => playSong(currentSong)}
+                        className="clay-btn clay-btn-secondary px-4 py-1.5 text-xs flex items-center gap-1.5"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        <span>Retry Playback</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Progress Seeking Bar */}
+                <div className="space-y-1.5 pt-1">
+                  <div
+                    onClick={handleSeek}
+                    className="group/seek relative h-3 flex items-center cursor-pointer select-none"
+                    title="Click or drag to seek"
+                  >
+                    <div className="w-full h-1.5 group-hover/seek:h-2.5 bg-white/10 rounded-full overflow-hidden transition-all duration-150">
+                      <div
+                        className="h-full bg-white transition-all duration-100 rounded-full"
+                        style={{ width: `${currentProgressPercent}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] font-mono text-[#777777]">
+                    <span>{formatDuration(playerState?.currentTime || 0)}</span>
+                    <span>{formatDuration(playerState?.duration || currentSong.duration || 180)}</span>
+                  </div>
+                </div>
+
+                {/* Title & Metadata Action Row */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-white/5">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-serif text-lg sm:text-2xl text-white font-medium truncate">
+                      {currentSong.title}
+                    </h2>
+                    <p className="text-xs sm:text-sm text-[#AAAAAA] font-light truncate">
+                      {currentSong.artist}
+                      {currentSong.provider === 'youtube' && (
+                        <span className="ml-2 text-[10px] font-mono px-1.5 py-0.5 rounded bg-red-600/20 text-red-400 border border-red-600/30">
+                          YouTube Music
+                        </span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Actions: Heart Favorite, Fullscreen, External Link */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={(e) => handleToggleFavorite(e, currentSong)}
+                      disabled={favoriteLoadingId === (currentSong.providerTrackId || currentSong.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all text-xs ${
+                        isCurrentFavorite
+                          ? 'bg-red-500/10 border-red-500/40 text-red-400 font-medium'
+                          : 'bg-[#181818] border-white/10 text-[#AAAAAA] hover:text-white hover:border-white/20'
+                      }`}
+                      title={isCurrentFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                    >
+                      {favoriteLoadingId === (currentSong.providerTrackId || currentSong.id) ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Heart className={`h-3.5 w-3.5 ${isCurrentFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+                      )}
+                      <span>{isCurrentFavorite ? 'Favorited' : 'Favorite'}</span>
+                    </button>
+
+                    {currentSong.provider === 'youtube' && (
+                      <button
+                        onClick={() => youtubePlayerManager.requestFullscreen()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 bg-[#181818] text-xs text-[#AAAAAA] hover:text-white hover:border-white/20 transition-all"
+                        title="Enter official YouTube fullscreen"
+                      >
+                        <Maximize2 className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Fullscreen</span>
+                      </button>
+                    )}
+
+                    {currentSong.shareUrl && (
+                      <a
+                        href={currentSong.shareUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-full border border-white/10 bg-[#181818] text-[#AAAAAA] hover:text-white transition-colors"
+                        title="Open in YouTube"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* Player Transport Controls */}
+                <div className="flex items-center justify-between bg-[#141414] p-3 rounded-2xl border border-white/5">
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <button
+                      onClick={() => musicService.toggleShuffle()}
+                      title={playerState?.isShuffle ? 'Shuffle On' : 'Shuffle Off'}
+                      className={`p-2 rounded-full transition-colors ${
+                        playerState?.isShuffle ? 'text-white bg-white/15' : 'text-[#666666] hover:text-[#AAAAAA]'
+                      }`}
+                    >
+                      <Shuffle className="h-4 w-4" />
+                    </button>
+
+                    <button
+                      onClick={playPrevSong}
+                      className="p-2 rounded-full text-[#888888] hover:text-white transition-colors"
+                      title="Previous Song"
+                    >
+                      <SkipBack className="h-4 w-4" />
+                    </button>
+
+                    <button
+                      onClick={togglePlay}
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black shadow-lg hover:scale-105 active:scale-95 transition-all"
+                      title={isPlaying ? 'Pause' : 'Play'}
+                    >
+                      {isPlaying ? (
+                        <Pause className="h-4 w-4 fill-black text-black" />
+                      ) : (
+                        <Play className="h-4 w-4 fill-black text-black ml-0.5" />
+                      )}
+                    </button>
+
+                    <button
+                      onClick={playNextSong}
+                      className="p-2 rounded-full text-[#888888] hover:text-white transition-colors"
+                      title="Next Song"
+                    >
+                      <SkipForward className="h-4 w-4" />
+                    </button>
+
+                    <button
+                      onClick={() => musicService.toggleRepeat()}
+                      title={`Repeat Mode: ${playerState?.repeatMode || 'all'}`}
+                      className={`p-2 rounded-full transition-colors ${
+                        playerState?.repeatMode !== 'off' ? 'text-white bg-white/15' : 'text-[#666666] hover:text-[#AAAAAA]'
+                      }`}
+                    >
+                      {playerState?.repeatMode === 'one' ? (
+                        <Repeat1 className="h-4 w-4" />
+                      ) : (
+                        <Repeat className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Volume Control */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => musicService.toggleMute()}
+                      className="p-1.5 text-[#888888] hover:text-white transition-colors"
+                      title={playerState?.isMuted ? 'Unmute' : 'Mute'}
+                    >
+                      {playerState?.isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                    </button>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={playerState?.isMuted ? 0 : playerState?.volume ?? 0.85}
+                      onChange={(e) => musicService.setVolume(parseFloat(e.target.value))}
+                      className="w-16 sm:w-24 accent-white h-1 cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Up Next / Queue Panel (4 cols on desktop) */}
+              <div className="lg:col-span-4 flex flex-col space-y-3 bg-[#111111] p-4 rounded-3xl border border-white/5 h-full max-h-[520px] overflow-hidden">
+                <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                  <div className="flex items-center gap-2">
+                    <ListMusic className="h-4 w-4 text-white" />
+                    <span className="font-serif text-sm text-white font-medium">Up Next &amp; Queue</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-[#777777]">{songs.length} tracks</span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+                  {songs.map((song, i) => {
+                    const isPlayingItem = currentSong.id === song.id;
+                    const isItemFav = musicService.isFavoriteTrack(song.providerTrackId || song.id);
+
+                    return (
+                      <div
+                        key={song.id}
+                        onClick={() => playSong(song)}
+                        className={`group flex items-center justify-between p-2 rounded-xl cursor-pointer transition-all ${
+                          isPlayingItem
+                            ? 'bg-white/10 border border-white/20'
+                            : 'hover:bg-white/5 border border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <span className="text-[10px] font-mono text-[#555555] w-4 text-right shrink-0">
+                            {i + 1}
+                          </span>
+                          <img
+                            src={song.coverUrl}
+                            alt={song.title}
+                            className="h-9 w-9 rounded-lg object-cover shrink-0 border border-white/10"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <h5 className={`font-serif text-xs truncate ${isPlayingItem ? 'text-white font-medium' : 'text-[#CCCCCC]'}`}>
+                              {song.title}
+                            </h5>
+                            <p className="text-[10px] text-[#777777] truncate">{song.artist}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0 pl-1">
+                          <button
+                            onClick={(e) => handleToggleFavorite(e, song)}
+                            className="p-1 rounded-full text-[#777777] hover:text-white"
+                            title="Favorite"
+                          >
+                            <Heart className={`h-3 w-3 ${isItemFav ? 'fill-red-500 text-red-500' : ''}`} />
+                          </button>
+                          {isPlayingItem && (
+                            <span className="flex items-center gap-0.5 h-2.5">
+                              <span className="w-0.5 h-full bg-white animate-pulse" />
+                              <span className="w-0.5 h-1/2 bg-white animate-pulse delay-75" />
+                              <span className="w-0.5 h-3/4 bg-white animate-pulse delay-150" />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -417,7 +714,7 @@ export default function MusicPage() {
               <div className="space-y-1">
                 {songs.map((song, index) => {
                   const isThisPlaying = currentSong?.id === song.id && isPlaying;
-                  const isOffline = musicService.isOfflineAvailable(song.id);
+                  const isFav = musicService.isFavoriteTrack(song.providerTrackId || song.id);
 
                   return (
                     <div
@@ -467,35 +764,17 @@ export default function MusicPage() {
                       </div>
 
                       <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-                        {song.provider !== 'youtube' && (
-                          <button
-                            onClick={async e => {
-                              e.stopPropagation();
-                              await musicService.saveTrackOffline(song);
-                              triggerHeartEffect(e.clientX, e.clientY);
-                            }}
-                            title={isOffline ? 'Cached for offline playback' : 'Download for offline playback'}
-                            className={`p-1.5 rounded-full transition-colors ${
-                              isOffline ? 'text-white/90 bg-white/10' : 'text-[#555555] hover:text-[#AAAAAA]'
-                            }`}
-                          >
-                            {isOffline ? (
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                            ) : (
-                              <Download className="h-3.5 w-3.5" />
-                            )}
-                          </button>
-                        )}
-
                         <span className="hidden sm:inline text-xs font-mono text-[#666666]">
                           {song.category}
                         </span>
 
+                        {/* Heart icon on song card */}
                         <button
-                          onClick={e => handleToggleFavorite(e, song.id)}
-                          className="p-1.5 rounded-full text-[#777777] hover:text-white"
+                          onClick={(e) => handleToggleFavorite(e, song)}
+                          className="p-2 rounded-full text-[#777777] hover:text-white hover:bg-white/5 transition-colors"
+                          title={isFav ? 'Remove favorite' : 'Add to favorites'}
                         >
-                          <Heart className={`h-4 w-4 ${song.isFavorite ? 'fill-white text-white' : ''}`} />
+                          <Heart className={`h-4 w-4 ${isFav ? 'fill-red-500 text-red-500' : ''}`} />
                         </button>
                       </div>
                     </div>
@@ -545,82 +824,22 @@ export default function MusicPage() {
             ))}
           </div>
 
-          {/* YouTube Configuration Setup Notice */}
-          {youtubeError && youtubeError.code === 'YOUTUBE_NOT_CONFIGURED' && (
-            <div className="clay-card p-6 rounded-3xl border border-red-500/20 bg-red-500/5 space-y-3">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <h4 className="text-sm font-medium text-red-300">YouTube Data API Key Required</h4>
-                  <p className="text-xs text-[#AAAAAA] leading-relaxed">
-                    To enable live music video search and discovery, create a YouTube Data API v3 key in your Google Cloud Console and add it to your backend environment:
-                  </p>
-                  <pre className="p-2.5 rounded-xl bg-black/60 border border-white/10 text-[11px] font-mono text-[#CCCCCC] overflow-x-auto my-2">
-                    YOUTUBE_API_KEY=your_api_key_here
-                  </pre>
-                  <p className="text-xs text-[#888888]">
-                    1. Go to{' '}
-                    <a
-                      href="https://console.cloud.google.com/apis/library/youtube.googleapis.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-white underline hover:text-red-300"
-                    >
-                      Google Cloud Console &rarr; YouTube Data API v3
-                    </a>
-                    .<br />
-                    2. Click <strong>Enable</strong> &rarr; Create Credentials &rarr; API key.
-                  </p>
-                </div>
-              </div>
-              <div className="flex justify-end pt-1">
-                <button
-                  onClick={loadTrendingYouTube}
-                  className="clay-btn clay-btn-secondary px-4 py-1.5 text-xs flex items-center gap-1.5"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                  Retry Connection
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Quota Exceeded Alert */}
-          {youtubeError && youtubeError.code === 'YOUTUBE_QUOTA_EXCEEDED' && (
-            <div className="clay-card p-5 rounded-2xl border border-amber-500/20 bg-amber-500/5 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs text-amber-300">
+          {/* Error Notice */}
+          {youtubeError && (
+            <div className="clay-card p-4 rounded-2xl border border-red-500/20 bg-red-500/5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs text-red-300">
                 <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>
-                  YouTube daily API quota has been reached. Saved sanctuary songs continue playing smoothly. Quota resets at midnight Pacific Time.
-                </span>
+                <span>{youtubeError.message}</span>
               </div>
               <button
                 onClick={loadTrendingYouTube}
-                className="clay-btn clay-btn-secondary px-3 py-1 text-xs shrink-0"
+                className="clay-btn clay-btn-secondary px-3 py-1 text-xs flex items-center gap-1"
               >
+                <RefreshCw className="h-3 w-3" />
                 Retry
               </button>
             </div>
           )}
-
-          {/* General Error Notice */}
-          {youtubeError &&
-            youtubeError.code !== 'YOUTUBE_NOT_CONFIGURED' &&
-            youtubeError.code !== 'YOUTUBE_QUOTA_EXCEEDED' && (
-              <div className="clay-card p-4 rounded-2xl border border-red-500/20 bg-red-500/5 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-xs text-red-300">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{youtubeError.message}</span>
-                </div>
-                <button
-                  onClick={loadTrendingYouTube}
-                  className="clay-btn clay-btn-secondary px-3 py-1 text-xs flex items-center gap-1"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                  Retry
-                </button>
-              </div>
-            )}
 
           {/* Loading Skeletons */}
           {isSearching && (
@@ -638,7 +857,7 @@ export default function MusicPage() {
             </div>
           )}
 
-          {/* Search Results Display */}
+          {/* Search Results Display with Heart Icon on Every Track Card */}
           {!isSearching && searchQuery.trim() && (
             <div className="space-y-4">
               <div className="flex items-center justify-between text-xs font-mono text-[#777777]">
@@ -659,6 +878,7 @@ export default function MusicPage() {
                     const isPlayingThis =
                       currentSong?.providerTrackId === track.id || currentSong?.id === `youtube_${track.id}`;
                     const isSaved = isTrackSavedInSanctuary(track.id);
+                    const isFav = musicService.isFavoriteTrack(track.id);
 
                     return (
                       <div
@@ -697,6 +917,7 @@ export default function MusicPage() {
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0 pl-2">
+                          {/* Play button */}
                           <button
                             onClick={() => handlePlayYouTubeTrack(track)}
                             title="Play Video"
@@ -710,6 +931,29 @@ export default function MusicPage() {
                             )}
                           </button>
 
+                          {/* Heart favorite button on YouTube track card */}
+                          <button
+                            onClick={(e) => handleToggleFavorite(e, {
+                              providerTrackId: track.id,
+                              title: track.title,
+                              artist: track.artist,
+                              coverUrl: track.coverUrl,
+                              duration: track.duration,
+                              provider: 'youtube',
+                              shareUrl: track.shareUrl,
+                            })}
+                            disabled={favoriteLoadingId === track.id}
+                            title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                            className="p-2 rounded-full text-[#888888] hover:text-white transition-colors"
+                          >
+                            {favoriteLoadingId === track.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-white" />
+                            ) : (
+                              <Heart className={`h-4 w-4 ${isFav ? 'fill-red-500 text-red-500' : ''}`} />
+                            )}
+                          </button>
+
+                          {/* Save to sanctuary button */}
                           <button
                             onClick={() => {
                               if (!isSaved) setTrackToSave(track);
@@ -737,15 +981,14 @@ export default function MusicPage() {
             </div>
           )}
 
-          {/* Trending & Featured Music in India when not searching */}
-          {!searchQuery.trim() && !youtubeError && (
-            <div className="space-y-4">
+          {/* Trending Music Section when no search active */}
+          {!searchQuery.trim() && (
+            <div className="space-y-4 pt-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Flame className="h-4 w-4 text-orange-400" />
-                  <h3 className="font-serif text-base text-white font-normal">Trending Music in India</h3>
+                <div>
+                  <h3 className="font-serif text-lg text-white font-normal">Trending Indian Music Videos</h3>
+                  <p className="text-xs text-[#777777]">Popular tracks right now in India on YouTube Music</p>
                 </div>
-                <span className="text-xs font-mono text-[#666666]">Official YouTube Charts</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -753,6 +996,7 @@ export default function MusicPage() {
                   const isPlayingThis =
                     currentSong?.providerTrackId === track.id || currentSong?.id === `youtube_${track.id}`;
                   const isSaved = isTrackSavedInSanctuary(track.id);
+                  const isFav = musicService.isFavoriteTrack(track.id);
 
                   return (
                     <div
@@ -785,15 +1029,16 @@ export default function MusicPage() {
                           <p className="text-xs text-[#777777] font-light truncate">{track.artist}</p>
                           <div className="flex items-center gap-2 pt-1 text-[10px] font-mono text-[#555555]">
                             <span>{formatDuration(track.duration)}</span>
-                            <span className="text-red-400">YouTube Video</span>
+                            <span className="text-red-400">YouTube</span>
                           </div>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0 pl-2">
+                        {/* Play button */}
                         <button
                           onClick={() => handlePlayYouTubeTrack(track)}
-                          title="Play Track"
+                          title="Play Video"
                           aria-label={`Play ${track.title}`}
                           className="p-2 rounded-full text-[#888888] hover:text-white transition-colors"
                         >
@@ -804,6 +1049,29 @@ export default function MusicPage() {
                           )}
                         </button>
 
+                        {/* Heart favorite button on trending track card */}
+                        <button
+                          onClick={(e) => handleToggleFavorite(e, {
+                            providerTrackId: track.id,
+                            title: track.title,
+                            artist: track.artist,
+                            coverUrl: track.coverUrl,
+                            duration: track.duration,
+                            provider: 'youtube',
+                            shareUrl: track.shareUrl,
+                          })}
+                          disabled={favoriteLoadingId === track.id}
+                          title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                          className="p-2 rounded-full text-[#888888] hover:text-white transition-colors"
+                        >
+                          {favoriteLoadingId === track.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-white" />
+                          ) : (
+                            <Heart className={`h-4 w-4 ${isFav ? 'fill-red-500 text-red-500' : ''}`} />
+                          )}
+                        </button>
+
+                        {/* Save to sanctuary button */}
                         <button
                           onClick={() => {
                             if (!isSaved) setTrackToSave(track);
@@ -901,40 +1169,40 @@ export default function MusicPage() {
         )}
       </Modal>
 
-      {/* MANUAL ADD TRACK MODAL */}
+      {/* MANUAL ADD CUSTOM TRACK MODAL */}
       <Modal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        title="Add Custom Song to Sanctuary"
-        description="Add a song title and artist to our collection."
+        title="Add Custom Track to Sanctuary"
+        description="Save your own special couple song with notes and category."
       >
         <form onSubmit={handleManualAddSong} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs text-[#AAAAAA]">Song Title</label>
+            <label className="text-xs text-[#AAAAAA]">Song Title *</label>
             <input
               type="text"
               required
               value={newTitle}
               onChange={e => setNewTitle(e.target.value)}
-              placeholder="e.g. Tum Hi Ho"
+              placeholder="e.g. Tum Hi Ho / Perfect"
               className="clay-input w-full h-10 px-3 text-xs"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs text-[#AAAAAA]">Artist Name</label>
+            <label className="text-xs text-[#AAAAAA]">Artist / Singer *</label>
             <input
               type="text"
               required
               value={newArtist}
               onChange={e => setNewArtist(e.target.value)}
-              placeholder="e.g. Arijit Singh"
+              placeholder="e.g. Arijit Singh / Ed Sheeran"
               className="clay-input w-full h-10 px-3 text-xs"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs text-[#AAAAAA]">Playlist Category</label>
+            <label className="text-xs text-[#AAAAAA]">Category</label>
             <select
               value={newCategory}
               onChange={e => setNewCategory(e.target.value as Song['category'])}
@@ -948,22 +1216,33 @@ export default function MusicPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs text-[#AAAAAA]">Album Cover URL (Optional)</label>
+            <label className="text-xs text-[#AAAAAA]">Cover Image URL (Optional)</label>
             <input
-              type="text"
+              type="url"
               value={newCoverUrl}
               onChange={e => setNewCoverUrl(e.target.value)}
-              placeholder="https://images.unsplash.com/..."
+              placeholder="https://..."
               className="clay-input w-full h-10 px-3 text-xs"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs text-[#AAAAAA]">Personal Note / Story</label>
+            <label className="text-xs text-[#AAAAAA]">Favorite Lyrics Line (Optional)</label>
+            <input
+              type="text"
+              value={newLyrics}
+              onChange={e => setNewLyrics(e.target.value)}
+              placeholder="e.g. Kyunki tum hi ho, ab tum hi ho..."
+              className="clay-input w-full h-10 px-3 text-xs"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs text-[#AAAAAA]">Special Memory / Note (Optional)</label>
             <textarea
               value={newNote}
               onChange={e => setNewNote(e.target.value)}
-              placeholder="Why this song means something to us..."
+              placeholder="The song that played on our first rainy drive..."
               rows={2}
               className="clay-input w-full p-3 text-xs"
             />
@@ -981,7 +1260,7 @@ export default function MusicPage() {
               type="submit"
               className="clay-btn clay-btn-primary px-5 py-2 text-xs font-medium"
             >
-              Add to Playlist
+              Add Track
             </button>
           </div>
         </form>
