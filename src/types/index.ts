@@ -192,6 +192,26 @@ export interface JamendoTrack {
   downloadAllowed: boolean;
 }
 
+export interface YouTubeTrack {
+  id: string;
+  title: string;
+  artist: string;
+  duration: number;
+  coverUrl: string;
+  shareUrl: string;
+  embedUrl: string;
+  isEmbeddable: boolean;
+  publishedAt?: string;
+  channelId?: string;
+}
+
+export interface YouTubeSearchResult {
+  tracks: YouTubeTrack[];
+  nextPageToken?: string;
+  prevPageToken?: string;
+  totalResults?: number;
+}
+
 export type DateEventType = 
   | 'Anniversary' 
   | 'Birthday' 

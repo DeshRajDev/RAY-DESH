@@ -16,14 +16,15 @@ import {
   AlertCircle,
   RefreshCw,
   X,
-  Disc3,
   BookmarkPlus,
-  Radio,
   Library,
+  Flame,
+  Radio,
+  Tv,
 } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
-import { Song, JamendoTrack } from '@/types';
-import { musicService, PlayerState } from '@/services/music.service';
+import { Song, YouTubeTrack } from '@/types';
+import { musicService } from '@/services/music.service';
 import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -36,29 +37,52 @@ const MUSIC_SECTIONS = [
   'Most Played',
 ] as const;
 
+const QUICK_DISCOVERY_TAGS = [
+  { label: 'Hindi Romantic', query: 'Hindi romantic love songs' },
+  { label: 'Bollywood Hits', query: 'Bollywood latest hits' },
+  { label: 'Arijit Singh', query: 'Arijit Singh best songs' },
+  { label: 'Punjabi Hits', query: 'Punjabi romantic songs' },
+  { label: 'Hindi Indie', query: 'Indian indie music acoustic' },
+  { label: 'Lo-Fi Romance', query: 'Hindi lo fi chill beats' },
+  { label: 'Pahari / Regional', query: 'Himachali Pahari romantic songs' },
+  { label: 'Global Hits', query: 'Romantic English acoustic songs' },
+];
+
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
+function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: string): { code: string; message: string } {
+  if (typeof err === 'string') {
+    return { code: fallbackCode, message: err };
+  }
+  if (err && typeof err === 'object') {
+    const code = 'code' in err && typeof (err as any).code === 'string' ? (err as any).code : fallbackCode;
+    const message = 'message' in err && typeof (err as any).message === 'string' ? (err as any).message : fallbackMessage;
+    return { code, message };
+  }
+  return { code: fallbackCode, message: fallbackMessage };
+}
+
 export default function MusicPage() {
   const { user, partner, currentSong, isPlaying, playSong, togglePlay, triggerHeartEffect } = useApp();
 
-  // Navigation tabs: Sanctuary Playlist vs. Jamendo Explorer
-  const [activeTab, setActiveTab] = useState<'sanctuary' | 'jamendo'>('sanctuary');
+  // Navigation tabs: Sanctuary Playlist vs. YouTube Explorer
+  const [activeTab, setActiveTab] = useState<'sanctuary' | 'youtube'>('sanctuary');
 
   // Sanctuary Songs state
   const [songs, setSongs] = useState<Song[]>([]);
   const [selectedSection, setSelectedSection] = useState<string>('All');
   const [isLoadingSongs, setIsLoadingSongs] = useState(true);
 
-  // Jamendo Discovery & Search state
+  // YouTube Discovery & Search state
   const [searchQuery, setSearchQuery] = useState('');
-  const [jamendoTracks, setJamendoTracks] = useState<JamendoTrack[]>([]);
-  const [featuredTracks, setFeaturedTracks] = useState<JamendoTrack[]>([]);
+  const [youtubeTracks, setYoutubeTracks] = useState<YouTubeTrack[]>([]);
+  const [trendingTracks, setTrendingTracks] = useState<YouTubeTrack[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [jamendoError, setJamendoError] = useState<{ code: string; message: string } | null>(null);
+  const [youtubeError, setYoutubeError] = useState<{ code: string; message: string } | null>(null);
   const latestRequestId = useRef(0);
 
   // Add Track Modal state
@@ -70,8 +94,8 @@ export default function MusicPage() {
   const [newLyrics, setNewLyrics] = useState('');
   const [newNote, setNewNote] = useState('');
 
-  // Save Jamendo Track to Sanctuary Modal
-  const [trackToSave, setTrackToSave] = useState<JamendoTrack | null>(null);
+  // Save YouTube Track to Sanctuary Modal
+  const [trackToSave, setTrackToSave] = useState<YouTubeTrack | null>(null);
   const [saveCategory, setSaveCategory] = useState<Song['category']>('Our Songs');
   const [saveNote, setSaveNote] = useState('');
   const [isSavingTrack, setIsSavingTrack] = useState(false);
@@ -93,57 +117,45 @@ export default function MusicPage() {
     return () => unsubscribe();
   }, [selectedSection, loadSanctuarySongs]);
 
-function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: string): { code: string; message: string } {
-  if (typeof err === 'string') {
-    return { code: fallbackCode, message: err };
-  }
-  if (err && typeof err === 'object') {
-    const code = 'code' in err && typeof (err as any).code === 'string' ? (err as any).code : fallbackCode;
-    const message = 'message' in err && typeof (err as any).message === 'string' ? (err as any).message : fallbackMessage;
-    return { code, message };
-  }
-  return { code: fallbackCode, message: fallbackMessage };
-}
-
-  // Load Featured Jamendo Tracks on Mount or Tab switch
-  const loadFeaturedJamendo = useCallback(async () => {
-    setJamendoError(null);
-    const res = await musicService.getFeaturedJamendo(20);
+  // Load Trending YouTube Music on Tab Switch
+  const loadTrendingYouTube = useCallback(async () => {
+    setYoutubeError(null);
+    const res = await musicService.getTrendingYouTube('IN', 20);
     if (res.success && Array.isArray(res.data)) {
-      setFeaturedTracks(res.data);
+      setTrendingTracks(res.data);
     } else if (res.error) {
-      setJamendoError(parseApiError(res.error, 'Failed to fetch featured Jamendo tracks', 'FEATURED_FAILED'));
+      setYoutubeError(parseApiError(res.error, 'Failed to fetch trending music', 'YOUTUBE_TRENDING_FAILED'));
     }
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'jamendo' && featuredTracks.length === 0 && !jamendoError) {
-      loadFeaturedJamendo();
+    if (activeTab === 'youtube' && trendingTracks.length === 0 && !youtubeError) {
+      loadTrendingYouTube();
     }
-  }, [activeTab, featuredTracks.length, jamendoError, loadFeaturedJamendo]);
+  }, [activeTab, trendingTracks.length, youtubeError, loadTrendingYouTube]);
 
-  // Debounced Jamendo Search
+  // Debounced YouTube Search
   useEffect(() => {
     const trimmed = searchQuery.trim();
     if (!trimmed) {
-      setJamendoTracks([]);
+      setYoutubeTracks([]);
       setIsSearching(false);
       return;
     }
 
     const currentReqId = ++latestRequestId.current;
     setIsSearching(true);
-    setJamendoError(null);
+    setYoutubeError(null);
 
     const timer = setTimeout(async () => {
-      const res = await musicService.searchJamendo(trimmed, 25);
+      const res = await musicService.searchYouTube(trimmed, 24, undefined, 'IN');
       if (currentReqId === latestRequestId.current) {
         setIsSearching(false);
-        if (res.success && Array.isArray(res.data)) {
-          setJamendoTracks(res.data);
+        if (res.success && res.data && Array.isArray(res.data.tracks)) {
+          setYoutubeTracks(res.data.tracks);
         } else if (res.error) {
-          setJamendoError(parseApiError(res.error, 'Search failed', 'SEARCH_FAILED'));
-          setJamendoTracks([]);
+          setYoutubeError(parseApiError(res.error, 'YouTube search failed', 'YOUTUBE_SEARCH_FAILED'));
+          setYoutubeTracks([]);
         }
       }
     }, 350);
@@ -151,36 +163,34 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Play Jamendo Track directly using unified music player
-  const handlePlayJamendoTrack = (track: JamendoTrack) => {
+  // Play YouTube Track directly using unified music service
+  const handlePlayYouTubeTrack = (track: YouTubeTrack) => {
     const virtualSong: Song = {
-      id: `jamendo_${track.id}`,
+      id: `youtube_${track.id}`,
       title: track.title,
       artist: track.artist,
-      album: track.album,
       duration: track.duration,
       coverUrl: track.coverUrl,
-      audioUrl: track.audioUrl,
+      audioUrl: track.embedUrl,
       addedById: user.id,
-      addedByName: 'Jamendo Music',
+      addedByName: 'YouTube Music',
       dateAdded: new Date().toISOString(),
       isFavorite: false,
       category: 'Our Songs',
-      provider: 'jamendo',
+      provider: 'youtube',
       providerTrackId: track.id,
-      licenseUrl: track.licenseUrl,
       shareUrl: track.shareUrl,
     };
     playSong(virtualSong);
   };
 
-  // Save Jamendo Track to Sanctuary Database
+  // Save YouTube Track to Sanctuary Database
   const handleConfirmSaveToSanctuary = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!trackToSave) return;
 
     setIsSavingTrack(true);
-    await musicService.addJamendoTrackToSanctuary(
+    await musicService.addYouTubeTrackToSanctuary(
       trackToSave,
       saveCategory,
       saveNote.trim() || undefined,
@@ -225,8 +235,8 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
     triggerHeartEffect();
   };
 
-  const isTrackSavedInSanctuary = (jamendoId: string) => {
-    return songs.some(s => s.providerTrackId === jamendoId || s.id === `jamendo_${jamendoId}`);
+  const isTrackSavedInSanctuary = (videoId: string) => {
+    return songs.some(s => s.providerTrackId === videoId || s.id === `youtube_${videoId}`);
   };
 
   return (
@@ -285,10 +295,10 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
               <span className="text-xs font-mono text-[#777777]">
                 Added by {currentSong.addedByName}
               </span>
-              {currentSong.provider === 'jamendo' && (
-                <span className="rounded-full bg-white/5 border border-white/10 px-2.5 py-0.5 text-[10px] font-mono text-[#AAAAAA] flex items-center gap-1">
-                  <Radio className="h-3 w-3 text-white" />
-                  Jamendo Royalty-Free
+              {currentSong.provider === 'youtube' && (
+                <span className="rounded-full bg-red-600/20 border border-red-600/30 px-2.5 py-0.5 text-[10px] font-mono text-red-400 flex items-center gap-1">
+                  <Tv className="h-3 w-3 text-red-400" />
+                  YouTube Video
                 </span>
               )}
             </div>
@@ -304,15 +314,15 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
               </p>
             )}
 
-            {currentSong.licenseUrl && (
+            {currentSong.shareUrl && (
               <div className="pt-1">
                 <a
-                  href={currentSong.licenseUrl}
+                  href={currentSong.shareUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[10px] font-mono text-[#666666] hover:text-[#999999] inline-flex items-center gap-1 transition-colors"
+                  className="text-[10px] font-mono text-[#777777] hover:text-white inline-flex items-center gap-1 transition-colors"
                 >
-                  <span>Creative Commons License</span>
+                  <span>Open on YouTube</span>
                   <ExternalLink className="h-2.5 w-2.5" />
                 </a>
               </div>
@@ -321,7 +331,7 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
         </div>
       )}
 
-      {/* Main Tab Navigation: Our Sanctuary Playlist vs. Jamendo Explorer */}
+      {/* Main Tab Navigation: Our Sanctuary Playlist vs. YouTube Explorer */}
       <div className="flex items-center gap-2 border-b border-white/10 pb-3">
         <button
           onClick={() => setActiveTab('sanctuary')}
@@ -336,15 +346,15 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
         </button>
 
         <button
-          onClick={() => setActiveTab('jamendo')}
+          onClick={() => setActiveTab('youtube')}
           className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-mono uppercase transition-all ${
-            activeTab === 'jamendo'
+            activeTab === 'youtube'
               ? 'bg-white text-black font-medium shadow-md'
               : 'text-[#888888] hover:text-white hover:bg-white/5'
           }`}
         >
-          <Disc3 className="h-3.5 w-3.5" />
-          <span>Jamendo Music Explorer</span>
+          <Tv className="h-3.5 w-3.5 text-red-500" />
+          <span>YouTube Music Explorer</span>
         </button>
       </div>
 
@@ -392,15 +402,15 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
                 <div className="space-y-1">
                   <h3 className="font-serif text-lg text-white font-normal">No songs in this collection yet</h3>
                   <p className="text-xs text-[#777777] max-w-sm mx-auto">
-                    Search Jamendo&apos;s library to find romantic melodies or add your own custom favorites.
+                    Search Hindi, Punjabi, Bollywood, or romantic music on YouTube to add to our private playlist.
                   </p>
                 </div>
                 <button
-                  onClick={() => setActiveTab('jamendo')}
+                  onClick={() => setActiveTab('youtube')}
                   className="clay-btn clay-btn-primary px-5 py-2 text-xs font-medium inline-flex items-center gap-2"
                 >
                   <Search className="h-3.5 w-3.5" />
-                  Explore Jamendo Music
+                  Explore YouTube Music
                 </button>
               </div>
             ) : (
@@ -449,31 +459,33 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
                           </h4>
                           <p className="text-xs text-[#777777] font-light line-clamp-1">
                             {song.artist}
-                            {song.provider === 'jamendo' && (
-                              <span className="ml-1 text-[10px] font-mono text-[#555555]">· Jamendo</span>
+                            {song.provider === 'youtube' && (
+                              <span className="ml-1.5 text-[10px] font-mono text-red-400">· YouTube</span>
                             )}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-                        <button
-                          onClick={async e => {
-                            e.stopPropagation();
-                            await musicService.saveTrackOffline(song);
-                            triggerHeartEffect(e.clientX, e.clientY);
-                          }}
-                          title={isOffline ? 'Cached for offline playback' : 'Download for offline playback'}
-                          className={`p-1.5 rounded-full transition-colors ${
-                            isOffline ? 'text-white/90 bg-white/10' : 'text-[#555555] hover:text-[#AAAAAA]'
-                          }`}
-                        >
-                          {isOffline ? (
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                          ) : (
-                            <Download className="h-3.5 w-3.5" />
-                          )}
-                        </button>
+                        {song.provider !== 'youtube' && (
+                          <button
+                            onClick={async e => {
+                              e.stopPropagation();
+                              await musicService.saveTrackOffline(song);
+                              triggerHeartEffect(e.clientX, e.clientY);
+                            }}
+                            title={isOffline ? 'Cached for offline playback' : 'Download for offline playback'}
+                            className={`p-1.5 rounded-full transition-colors ${
+                              isOffline ? 'text-white/90 bg-white/10' : 'text-[#555555] hover:text-[#AAAAAA]'
+                            }`}
+                          >
+                            {isOffline ? (
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            ) : (
+                              <Download className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        )}
 
                         <span className="hidden sm:inline text-xs font-mono text-[#666666]">
                           {song.category}
@@ -495,8 +507,8 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
         </div>
       )}
 
-      {/* TAB 2: JAMENDO MUSIC EXPLORER */}
-      {activeTab === 'jamendo' && (
+      {/* TAB 2: YOUTUBE MUSIC EXPLORER */}
+      {activeTab === 'youtube' && (
         <div className="space-y-6">
           {/* Search bar */}
           <div className="relative">
@@ -505,7 +517,7 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search Jamendo for tracks, artists, or moods (e.g. acoustic, lo-fi, piano)..."
+              placeholder="Search Hindi, Bollywood, Punjabi, Arijit Singh, or your favorite song..."
               className="clay-input w-full pl-11 pr-10 h-12 text-sm bg-[#0C0C0C] rounded-2xl border border-white/10 placeholder:text-[#555555]"
             />
             {searchQuery && (
@@ -518,36 +530,52 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
             )}
           </div>
 
-          {/* Jamendo Configuration Error Alert */}
-          {jamendoError && jamendoError.code === 'JAMENDO_NOT_CONFIGURED' && (
-            <div className="clay-card p-6 rounded-3xl border border-amber-500/20 bg-amber-500/5 space-y-3">
+          {/* Quick Category Chips */}
+          <div className="flex flex-wrap items-center gap-2">
+            {QUICK_DISCOVERY_TAGS.map(tag => (
+              <button
+                key={tag.label}
+                onClick={() => setSearchQuery(tag.query)}
+                className={`clay-pill text-xs flex items-center gap-1.5 transition-colors ${
+                  searchQuery === tag.query ? 'active text-black' : 'text-[#888888] hover:text-white'
+                }`}
+              >
+                <span>{tag.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* YouTube Configuration Setup Notice */}
+          {youtubeError && youtubeError.code === 'YOUTUBE_NOT_CONFIGURED' && (
+            <div className="clay-card p-6 rounded-3xl border border-red-500/20 bg-red-500/5 space-y-3">
               <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <h4 className="text-sm font-medium text-amber-300">Jamendo Client ID Required</h4>
+                  <h4 className="text-sm font-medium text-red-300">YouTube Data API Key Required</h4>
                   <p className="text-xs text-[#AAAAAA] leading-relaxed">
-                    To enable live music search and streaming from Jamendo, add your free client ID to your backend environment:
+                    To enable live music video search and discovery, create a YouTube Data API v3 key in your Google Cloud Console and add it to your backend environment:
                   </p>
                   <pre className="p-2.5 rounded-xl bg-black/60 border border-white/10 text-[11px] font-mono text-[#CCCCCC] overflow-x-auto my-2">
-                    JAMENDO_CLIENT_ID=your_client_id_here
+                    YOUTUBE_API_KEY=your_api_key_here
                   </pre>
                   <p className="text-xs text-[#888888]">
-                    Obtain your client ID from{' '}
+                    1. Go to{' '}
                     <a
-                      href="https://developer.jamendo.com/v3.0/docs"
+                      href="https://console.cloud.google.com/apis/library/youtube.googleapis.com"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-white underline hover:text-amber-300"
+                      className="text-white underline hover:text-red-300"
                     >
-                      Jamendo Developer Portal
+                      Google Cloud Console &rarr; YouTube Data API v3
                     </a>
-                    .
+                    .<br />
+                    2. Click <strong>Enable</strong> &rarr; Create Credentials &rarr; API key.
                   </p>
                 </div>
               </div>
               <div className="flex justify-end pt-1">
                 <button
-                  onClick={loadFeaturedJamendo}
+                  onClick={loadTrendingYouTube}
                   className="clay-btn clay-btn-secondary px-4 py-1.5 text-xs flex items-center gap-1.5"
                 >
                   <RefreshCw className="h-3 w-3" />
@@ -557,29 +585,49 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
             </div>
           )}
 
-          {/* General Error Notice */}
-          {jamendoError && jamendoError.code !== 'JAMENDO_NOT_CONFIGURED' && (
-            <div className="clay-card p-4 rounded-2xl border border-red-500/20 bg-red-500/5 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs text-red-300">
+          {/* Quota Exceeded Alert */}
+          {youtubeError && youtubeError.code === 'YOUTUBE_QUOTA_EXCEEDED' && (
+            <div className="clay-card p-5 rounded-2xl border border-amber-500/20 bg-amber-500/5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs text-amber-300">
                 <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{jamendoError.message}</span>
+                <span>
+                  YouTube daily API quota has been reached. Saved sanctuary songs continue playing smoothly. Quota resets at midnight Pacific Time.
+                </span>
               </div>
               <button
-                onClick={loadFeaturedJamendo}
-                className="clay-btn clay-btn-secondary px-3 py-1 text-xs flex items-center gap-1"
+                onClick={loadTrendingYouTube}
+                className="clay-btn clay-btn-secondary px-3 py-1 text-xs shrink-0"
               >
-                <RefreshCw className="h-3 w-3" />
                 Retry
               </button>
             </div>
           )}
+
+          {/* General Error Notice */}
+          {youtubeError &&
+            youtubeError.code !== 'YOUTUBE_NOT_CONFIGURED' &&
+            youtubeError.code !== 'YOUTUBE_QUOTA_EXCEEDED' && (
+              <div className="clay-card p-4 rounded-2xl border border-red-500/20 bg-red-500/5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs text-red-300">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{youtubeError.message}</span>
+                </div>
+                <button
+                  onClick={loadTrendingYouTube}
+                  className="clay-btn clay-btn-secondary px-3 py-1 text-xs flex items-center gap-1"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Retry
+                </button>
+              </div>
+            )}
 
           {/* Loading Skeletons */}
           {isSearching && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[1, 2, 3, 4, 6, 7].map(i => (
                 <div key={i} className="flex items-center gap-3 p-3.5 rounded-2xl border border-white/10 bg-[#0C0C0C]">
-                  <Skeleton className="h-14 w-14 rounded-xl shrink-0" />
+                  <Skeleton className="h-16 w-24 rounded-xl shrink-0" />
                   <div className="flex-1 space-y-2">
                     <Skeleton className="h-4 w-3/4 rounded" />
                     <Skeleton className="h-3 w-1/2 rounded" />
@@ -595,68 +643,67 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
             <div className="space-y-4">
               <div className="flex items-center justify-between text-xs font-mono text-[#777777]">
                 <span>Search results for &ldquo;{searchQuery}&rdquo;</span>
-                <span>{jamendoTracks.length} tracks found</span>
+                <span>{youtubeTracks.length} tracks found</span>
               </div>
 
-              {jamendoTracks.length === 0 && !jamendoError ? (
+              {youtubeTracks.length === 0 && !youtubeError ? (
                 <div className="clay-card p-8 rounded-3xl text-center space-y-2 border border-white/10 bg-[#0C0C0C]">
                   <p className="font-serif text-base text-white">No tracks found</p>
                   <p className="text-xs text-[#777777]">
-                    Try adjusting your keywords or searching by specific artist name, mood, or genre.
+                    Try adjusting your keywords or searching by specific artist, singer, movie, or song title.
                   </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {jamendoTracks.map(track => {
-                    const isPlayingThis = currentSong?.audioUrl === track.audioUrl && isPlaying;
+                  {youtubeTracks.map(track => {
+                    const isPlayingThis =
+                      currentSong?.providerTrackId === track.id || currentSong?.id === `youtube_${track.id}`;
                     const isSaved = isTrackSavedInSanctuary(track.id);
 
                     return (
                       <div
                         key={track.id}
-                        className="group flex items-center justify-between p-3.5 rounded-2xl border border-white/10 bg-[#0C0C0C] hover:border-white/20 transition-all"
+                        className="group flex items-center justify-between p-3 rounded-2xl border border-white/10 bg-[#0C0C0C] hover:border-white/20 transition-all"
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#1A1A1A]">
+                          <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#1A1A1A]">
                             <img
                               src={track.coverUrl}
                               alt={track.title}
                               className="h-full w-full object-cover"
                             />
                             <button
-                              onClick={() => handlePlayJamendoTrack(track)}
+                              onClick={() => handlePlayYouTubeTrack(track)}
                               className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"
                             >
-                              {isPlayingThis ? (
-                                <Pause className="h-4 w-4 fill-white text-white" />
+                              {isPlayingThis && isPlaying ? (
+                                <Pause className="h-5 w-5 fill-white text-white" />
                               ) : (
-                                <Play className="h-4 w-4 fill-white text-white ml-0.5" />
+                                <Play className="h-5 w-5 fill-white text-white ml-0.5" />
                               )}
                             </button>
                           </div>
 
                           <div className="min-w-0 flex-1">
-                            <h4 className="font-serif text-sm font-normal text-white truncate">
+                            <h4 className="font-serif text-sm font-normal text-white line-clamp-1">
                               {track.title}
                             </h4>
                             <p className="text-xs text-[#777777] font-light truncate">{track.artist}</p>
                             <div className="flex items-center gap-2 pt-1 text-[10px] font-mono text-[#555555]">
                               <span>{formatDuration(track.duration)}</span>
-                              {track.licenseUrl && (
-                                <span className="hover:text-[#888888] truncate">CC License</span>
-                              )}
+                              <span className="text-red-400">YouTube</span>
                             </div>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0 pl-2">
                           <button
-                            onClick={() => handlePlayJamendoTrack(track)}
-                            title="Play Preview"
+                            onClick={() => handlePlayYouTubeTrack(track)}
+                            title="Play Video"
                             aria-label={`Play ${track.title}`}
                             className="p-2 rounded-full text-[#888888] hover:text-white transition-colors"
                           >
-                            {isPlayingThis ? (
+                            {isPlayingThis && isPlaying ? (
                               <Pause className="h-4 w-4" />
                             ) : (
                               <Play className="h-4 w-4" />
@@ -690,66 +737,67 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
             </div>
           )}
 
-          {/* Featured / Trending Jamendo Tracks when not searching */}
-          {!searchQuery.trim() && !jamendoError && (
+          {/* Trending & Featured Music in India when not searching */}
+          {!searchQuery.trim() && !youtubeError && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-white" />
-                  <h3 className="font-serif text-base text-white font-normal">Featured &amp; Trending on Jamendo</h3>
+                  <Flame className="h-4 w-4 text-orange-400" />
+                  <h3 className="font-serif text-base text-white font-normal">Trending Music in India</h3>
                 </div>
-                <span className="text-xs font-mono text-[#666666]">Royalty-Free Music</span>
+                <span className="text-xs font-mono text-[#666666]">Official YouTube Charts</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {featuredTracks.map(track => {
-                  const isPlayingThis = currentSong?.audioUrl === track.audioUrl && isPlaying;
+                {trendingTracks.map(track => {
+                  const isPlayingThis =
+                    currentSong?.providerTrackId === track.id || currentSong?.id === `youtube_${track.id}`;
                   const isSaved = isTrackSavedInSanctuary(track.id);
 
                   return (
                     <div
                       key={track.id}
-                      className="group flex items-center justify-between p-3.5 rounded-2xl border border-white/10 bg-[#0C0C0C] hover:border-white/20 transition-all"
+                      className="group flex items-center justify-between p-3 rounded-2xl border border-white/10 bg-[#0C0C0C] hover:border-white/20 transition-all"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#1A1A1A]">
+                        <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#1A1A1A]">
                           <img
                             src={track.coverUrl}
                             alt={track.title}
                             className="h-full w-full object-cover"
                           />
                           <button
-                            onClick={() => handlePlayJamendoTrack(track)}
+                            onClick={() => handlePlayYouTubeTrack(track)}
                             className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"
                           >
-                            {isPlayingThis ? (
-                              <Pause className="h-4 w-4 fill-white text-white" />
+                            {isPlayingThis && isPlaying ? (
+                              <Pause className="h-5 w-5 fill-white text-white" />
                             ) : (
-                              <Play className="h-4 w-4 fill-white text-white ml-0.5" />
+                              <Play className="h-5 w-5 fill-white text-white ml-0.5" />
                             )}
                           </button>
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <h4 className="font-serif text-sm font-normal text-white truncate">
+                          <h4 className="font-serif text-sm font-normal text-white line-clamp-1">
                             {track.title}
                           </h4>
                           <p className="text-xs text-[#777777] font-light truncate">{track.artist}</p>
                           <div className="flex items-center gap-2 pt-1 text-[10px] font-mono text-[#555555]">
                             <span>{formatDuration(track.duration)}</span>
-                            <span>Jamendo Audio</span>
+                            <span className="text-red-400">YouTube Video</span>
                           </div>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0 pl-2">
                         <button
-                          onClick={() => handlePlayJamendoTrack(track)}
+                          onClick={() => handlePlayYouTubeTrack(track)}
                           title="Play Track"
                           aria-label={`Play ${track.title}`}
                           className="p-2 rounded-full text-[#888888] hover:text-white transition-colors"
                         >
-                          {isPlayingThis ? (
+                          {isPlayingThis && isPlaying ? (
                             <Pause className="h-4 w-4" />
                           ) : (
                             <Play className="h-4 w-4" />
@@ -784,7 +832,7 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
         </div>
       )}
 
-      {/* SAVE JAMENDO TRACK TO SANCTUARY MODAL */}
+      {/* SAVE YOUTUBE TRACK TO SANCTUARY MODAL */}
       <Modal
         isOpen={!!trackToSave}
         onClose={() => setTrackToSave(null)}
@@ -797,7 +845,7 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
               <img
                 src={trackToSave.coverUrl}
                 alt={trackToSave.title}
-                className="h-12 w-12 rounded-xl object-cover shrink-0"
+                className="h-12 w-16 rounded-xl object-cover shrink-0"
               />
               <div className="min-w-0 flex-1">
                 <h5 className="font-serif text-sm text-white truncate">{trackToSave.title}</h5>
@@ -823,11 +871,11 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs text-[#AAAAAA]">Personal Note or Story (Optional)</label>
+              <label className="text-xs text-[#AAAAAA]">Personal Note or Memory (Optional)</label>
               <textarea
                 value={saveNote}
                 onChange={e => setSaveNote(e.target.value)}
-                placeholder="Why does this track remind you of us..."
+                placeholder="Why this song is special to us..."
                 rows={2}
                 className="clay-input w-full p-3 text-xs"
               />
@@ -858,7 +906,7 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         title="Add Custom Song to Sanctuary"
-        description="Add an MP3 URL or personal song link to our collection."
+        description="Add a song title and artist to our collection."
       >
         <form onSubmit={handleManualAddSong} className="space-y-4">
           <div className="space-y-1.5">
@@ -868,7 +916,7 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
               required
               value={newTitle}
               onChange={e => setNewTitle(e.target.value)}
-              placeholder="e.g. Mystery of Love"
+              placeholder="e.g. Tum Hi Ho"
               className="clay-input w-full h-10 px-3 text-xs"
             />
           </div>
@@ -880,7 +928,7 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
               required
               value={newArtist}
               onChange={e => setNewArtist(e.target.value)}
-              placeholder="e.g. Sufjan Stevens"
+              placeholder="e.g. Arijit Singh"
               className="clay-input w-full h-10 px-3 text-xs"
             />
           </div>
@@ -900,7 +948,7 @@ function parseApiError(err: unknown, fallbackMessage: string, fallbackCode: stri
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs text-[#AAAAAA]">Album Cover URL</label>
+            <label className="text-xs text-[#AAAAAA]">Album Cover URL (Optional)</label>
             <input
               type="text"
               value={newCoverUrl}

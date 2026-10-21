@@ -3,7 +3,7 @@ import { authenticate } from '../../middleware/authenticate';
 import { requireCouple } from '../../middleware/authorize';
 import { AuthenticatedRequest } from '../../types';
 import { Song } from '../../models/Song';
-import { jamendoService } from './jamendo.service';
+import { youtubeService } from './youtube.service';
 import { sendSuccess, sendError } from '../../utils/response';
 import mongoose from 'mongoose';
 
@@ -20,73 +20,86 @@ router.get('/', authenticate, requireCouple, async (req: AuthenticatedRequest, r
   }
 });
 
-// GET search Jamendo tracks
+// GET search YouTube music videos
 router.get('/search', authenticate, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     if (!query) {
-      return sendSuccess(res, [], 'Empty query provided');
+      return sendSuccess(res, { tracks: [] }, 'Empty query provided');
     }
 
-    if (!jamendoService.isConfigured()) {
+    if (!youtubeService.isConfigured()) {
       return res.status(503).json({
         success: false,
-        message: 'Jamendo API client ID is not configured on the server. Please set JAMENDO_CLIENT_ID in your environment.',
-        error: { code: 'JAMENDO_NOT_CONFIGURED' },
+        message: 'YouTube Data API key is not configured on the server. Please set YOUTUBE_API_KEY in your environment.',
+        error: { code: 'YOUTUBE_NOT_CONFIGURED' },
       });
     }
 
     const limit = Math.min(Math.max(1, parseInt(String(req.query.limit || 20), 10) || 20), 50);
-    const offset = Math.max(0, parseInt(String(req.query.offset || 0), 10) || 0);
+    const pageToken = typeof req.query.pageToken === 'string' ? req.query.pageToken : undefined;
+    const regionCode = typeof req.query.regionCode === 'string' ? req.query.regionCode : 'IN';
 
-    const tracks = await jamendoService.searchTracks(query, limit, offset);
-    return sendSuccess(res, tracks);
+    const result = await youtubeService.searchVideos(query, limit, pageToken, regionCode);
+    return sendSuccess(res, result);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Jamendo search failed';
+    const msg = err instanceof Error ? err.message : 'YouTube search failed';
     const status = (err as any).statusCode || 500;
-    return sendError(res, msg, status);
+    const code = (err as any).code || 'YOUTUBE_SEARCH_ERROR';
+    return res.status(status).json({
+      success: false,
+      message: msg,
+      error: { code },
+    });
   }
 });
 
-// GET featured Jamendo tracks for discovery
-router.get('/featured', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+// GET trending music videos (default: India)
+router.get('/trending', authenticate, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    if (!jamendoService.isConfigured()) {
+    if (!youtubeService.isConfigured()) {
       return res.status(503).json({
         success: false,
-        message: 'Jamendo API client ID is not configured on the server. Please set JAMENDO_CLIENT_ID in your environment.',
-        error: { code: 'JAMENDO_NOT_CONFIGURED' },
+        message: 'YouTube Data API key is not configured on the server. Please set YOUTUBE_API_KEY in your environment.',
+        error: { code: 'YOUTUBE_NOT_CONFIGURED' },
       });
     }
 
     const limit = Math.min(Math.max(1, parseInt(String(req.query.limit || 20), 10) || 20), 50);
-    const tracks = await jamendoService.getFeaturedTracks(limit);
+    const regionCode = typeof req.query.regionCode === 'string' ? req.query.regionCode : 'IN';
+
+    const tracks = await youtubeService.getTrendingMusic(regionCode, limit);
     return sendSuccess(res, tracks);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Failed to fetch featured tracks';
+    const msg = err instanceof Error ? err.message : 'Failed to fetch trending music';
     const status = (err as any).statusCode || 500;
-    return sendError(res, msg, status);
+    const code = (err as any).code || 'YOUTUBE_TRENDING_ERROR';
+    return res.status(status).json({
+      success: false,
+      message: msg,
+      error: { code },
+    });
   }
 });
 
-// GET single Jamendo track details
-router.get('/tracks/:id', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+// GET single YouTube video details
+router.get('/videos/:id', authenticate, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    if (!jamendoService.isConfigured()) {
+    if (!youtubeService.isConfigured()) {
       return res.status(503).json({
         success: false,
-        message: 'Jamendo API client ID is not configured on the server. Please set JAMENDO_CLIENT_ID in your environment.',
-        error: { code: 'JAMENDO_NOT_CONFIGURED' },
+        message: 'YouTube Data API key is not configured on the server. Please set YOUTUBE_API_KEY in your environment.',
+        error: { code: 'YOUTUBE_NOT_CONFIGURED' },
       });
     }
 
-    const track = await jamendoService.getTrackById(req.params.id);
+    const track = await youtubeService.getVideoDetails(req.params.id);
     if (!track) {
-      return sendError(res, 'Track not found on Jamendo', 404);
+      return sendError(res, 'Video not found on YouTube', 404);
     }
     return sendSuccess(res, track);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Failed to retrieve track metadata';
+    const msg = err instanceof Error ? err.message : 'Failed to retrieve video metadata';
     const status = (err as any).statusCode || 500;
     return sendError(res, msg, status);
   }

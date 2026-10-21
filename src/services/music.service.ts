@@ -1,8 +1,9 @@
-import { Song, JamendoTrack, ApiResponse } from '@/types';
+import { Song, YouTubeTrack, YouTubeSearchResult, ApiResponse } from '@/types';
 import { initialSongs } from '@/constants/initial-data';
 import { ApiClient } from './api/client';
+import { youtubePlayerManager, YTPlayerStateCode } from '@/lib/youtube-player';
 
-const MUSIC_STORAGE_KEY = 'sanctuary_music_songs_v3';
+const MUSIC_STORAGE_KEY = 'sanctuary_music_songs_v4';
 const OFFLINE_AUDIO_KEY = 'sanctuary_offline_audio_v2';
 
 export interface PlayerState {
@@ -75,7 +76,7 @@ class MusicService {
         const stored = localStorage.getItem(MUSIC_STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.some(s => s.title === 'Love Note' || s.title === 'Samjhawan')) {
+          if (Array.isArray(parsed) && parsed.length > 0) {
             this.songs = parsed;
             return;
           }
@@ -220,7 +221,7 @@ class MusicService {
     }
   }
 
-  // --- Audio Element Life Cycle & Event Handlers ---
+  // --- Audio Element Handlers for non-YouTube tracks ---
   private setupAudioElement() {
     if (typeof window === 'undefined') return;
     if (!this.audioElement) {
@@ -231,47 +232,59 @@ class MusicService {
     this.removeAudioListeners();
 
     const onTimeUpdate = () => {
-      if (this.audioElement) {
+      if (this.audioElement && this.currentSong?.provider !== 'youtube') {
         this.currentTime = this.audioElement.currentTime;
         this.notifyPlayer();
       }
     };
 
     const onLoadedMetadata = () => {
-      if (this.audioElement && !isNaN(this.audioElement.duration)) {
-        this.duration = this.audioElement.duration;
-      } else if (this.currentSong?.duration) {
-        this.duration = this.currentSong.duration;
+      if (this.audioElement && this.currentSong?.provider !== 'youtube') {
+        if (!isNaN(this.audioElement.duration)) {
+          this.duration = this.audioElement.duration;
+        } else if (this.currentSong?.duration) {
+          this.duration = this.currentSong.duration;
+        }
+        this.notifyPlayer();
       }
-      this.notifyPlayer();
     };
 
     const onWaiting = () => {
-      this.isLoading = true;
-      this.notifyPlayer();
+      if (this.currentSong?.provider !== 'youtube') {
+        this.isLoading = true;
+        this.notifyPlayer();
+      }
     };
 
     const onPlaying = () => {
-      this.isLoading = false;
-      this.isPlaying = true;
-      this.error = null;
-      this.notifyPlayer();
+      if (this.currentSong?.provider !== 'youtube') {
+        this.isLoading = false;
+        this.isPlaying = true;
+        this.error = null;
+        this.notifyPlayer();
+      }
     };
 
     const onCanPlay = () => {
-      this.isLoading = false;
-      this.notifyPlayer();
+      if (this.currentSong?.provider !== 'youtube') {
+        this.isLoading = false;
+        this.notifyPlayer();
+      }
     };
 
     const onEnded = () => {
-      this.playNext();
+      if (this.currentSong?.provider !== 'youtube') {
+        this.playNext();
+      }
     };
 
     const onError = () => {
-      this.isLoading = false;
-      this.isPlaying = false;
-      this.error = 'Streaming playback failed for this track.';
-      this.notifyPlayer();
+      if (this.currentSong?.provider !== 'youtube') {
+        this.isLoading = false;
+        this.isPlaying = false;
+        this.error = 'Streaming playback failed for this audio track.';
+        this.notifyPlayer();
+      }
     };
 
     this.boundAudioListeners = {
@@ -437,59 +450,69 @@ class MusicService {
     return { success: true, data: true };
   }
 
-  // --- Jamendo Music API Integration ---
-  public async searchJamendo(query: string, limit: number = 20, offset: number = 0): Promise<ApiResponse<JamendoTrack[]>> {
+  // --- YouTube Music API Integration ---
+  public async searchYouTube(
+    query: string,
+    limit: number = 20,
+    pageToken?: string,
+    regionCode: string = 'IN'
+  ): Promise<ApiResponse<YouTubeSearchResult>> {
     try {
-      const res = await ApiClient.get<ApiResponse<JamendoTrack[]>>(
-        `/music/search?q=${encodeURIComponent(query.trim())}&limit=${limit}&offset=${offset}`
-      );
+      const qs = new URLSearchParams({
+        q: query.trim(),
+        limit: String(limit),
+        regionCode,
+        ...(pageToken ? { pageToken } : {}),
+      });
+
+      const res = await ApiClient.get<ApiResponse<YouTubeSearchResult>>(`/music/search?${qs.toString()}`);
       return res;
     } catch (err: any) {
       return {
         success: false,
         error: {
-          code: err?.data?.error?.code || 'JAMENDO_SEARCH_FAILED',
-          message: err?.message || 'Failed to search Jamendo tracks',
+          code: err?.data?.error?.code || 'YOUTUBE_SEARCH_FAILED',
+          message: err?.message || 'Failed to search YouTube videos',
+        },
+        data: { tracks: [] },
+      };
+    }
+  }
+
+  public async getTrendingYouTube(regionCode: string = 'IN', limit: number = 20): Promise<ApiResponse<YouTubeTrack[]>> {
+    try {
+      const res = await ApiClient.get<ApiResponse<YouTubeTrack[]>>(`/music/trending?regionCode=${regionCode}&limit=${limit}`);
+      return res;
+    } catch (err: any) {
+      return {
+        success: false,
+        error: {
+          code: err?.data?.error?.code || 'YOUTUBE_TRENDING_FAILED',
+          message: err?.message || 'Failed to fetch trending YouTube music',
         },
         data: [],
       };
     }
   }
 
-  public async getFeaturedJamendo(limit: number = 20): Promise<ApiResponse<JamendoTrack[]>> {
+  public async getYouTubeVideoDetails(videoId: string): Promise<ApiResponse<YouTubeTrack | null>> {
     try {
-      const res = await ApiClient.get<ApiResponse<JamendoTrack[]>>(`/music/featured?limit=${limit}`);
+      const res = await ApiClient.get<ApiResponse<YouTubeTrack>>(`/music/videos/${videoId}`);
       return res;
     } catch (err: any) {
       return {
         success: false,
         error: {
-          code: err?.data?.error?.code || 'JAMENDO_FEATURED_FAILED',
-          message: err?.message || 'Failed to fetch featured Jamendo tracks',
-        },
-        data: [],
-      };
-    }
-  }
-
-  public async getJamendoTrackById(trackId: string): Promise<ApiResponse<JamendoTrack | null>> {
-    try {
-      const res = await ApiClient.get<ApiResponse<JamendoTrack>>(`/music/tracks/${trackId}`);
-      return res;
-    } catch (err: any) {
-      return {
-        success: false,
-        error: {
-          code: 'JAMENDO_TRACK_FAILED',
-          message: err?.message || 'Failed to retrieve track metadata',
+          code: 'YOUTUBE_VIDEO_FAILED',
+          message: err?.message || 'Failed to load video details from YouTube',
         },
         data: null,
       };
     }
   }
 
-  public async addJamendoTrackToSanctuary(
-    track: JamendoTrack,
+  public async addYouTubeTrackToSanctuary(
+    track: YouTubeTrack,
     category: Song['category'] = 'Our Songs',
     note?: string,
     userName: string = 'Sanctuary',
@@ -498,34 +521,78 @@ class MusicService {
     return this.addSong({
       title: track.title,
       artist: track.artist,
-      album: track.album || '',
       coverUrl: track.coverUrl,
-      audioUrl: track.audioUrl,
+      audioUrl: track.embedUrl,
       duration: track.duration,
       addedById: userId,
       addedByName: userName,
       isFavorite: false,
       category,
       note,
-      provider: 'jamendo',
+      provider: 'youtube',
       providerTrackId: track.id,
-      licenseUrl: track.licenseUrl,
       shareUrl: track.shareUrl,
     });
   }
 
-  // --- Playback Controls ---
+  // --- Unified Playback Controls (YouTube + Audio) ---
   public playSong(song: Song) {
     this.currentSong = song;
     this.isPlaying = true;
     this.currentTime = 0;
     this.duration = song.duration || 180;
     this.error = null;
-    this.isLoading = !!song.audioUrl;
+    this.isLoading = true;
 
     this.stopAmbientProgression();
 
-    if (song.audioUrl && typeof window !== 'undefined') {
+    if (song.provider === 'youtube' && song.providerTrackId) {
+      // Pause any running HTMLAudioElement
+      if (this.audioElement) {
+        this.audioElement.pause();
+      }
+
+      const videoId = song.providerTrackId;
+      youtubePlayerManager.mountPlayer('global-youtube-player-frame', videoId, {
+        onReady: () => {
+          this.isLoading = false;
+          this.isPlaying = true;
+          this.notifyPlayer();
+        },
+        onStateChange: (state: YTPlayerStateCode) => {
+          if (state === 1) {
+            // PLAYING
+            this.isPlaying = true;
+            this.isLoading = false;
+            this.error = null;
+          } else if (state === 2) {
+            // PAUSED
+            this.isPlaying = false;
+          } else if (state === 3) {
+            // BUFFERING
+            this.isLoading = true;
+          }
+          this.notifyPlayer();
+        },
+        onTimeUpdate: (cur, dur) => {
+          this.currentTime = cur;
+          if (dur > 0) this.duration = dur;
+          this.notifyPlayer();
+        },
+        onError: (_code, msg) => {
+          this.isLoading = false;
+          this.isPlaying = false;
+          this.error = msg;
+          this.notifyPlayer();
+        },
+        onEnded: () => {
+          this.playNext();
+        },
+      });
+    } else if (song.audioUrl && typeof window !== 'undefined') {
+      // Pause YouTube player if mounted
+      youtubePlayerManager.pause();
+
       this.setupAudioElement();
       if (this.audioElement) {
         this.audioElement.src = song.audioUrl;
@@ -534,12 +601,12 @@ class MusicService {
         this.audioElement.play().catch((err: unknown) => {
           console.warn('[MusicService] Autoplay prevented or stream blocked:', err);
           this.isLoading = false;
-          // Fallback to ambient if browser blocked audio or stream unreachable
           this.startAmbientProgression();
         });
       }
     } else {
       this.startAmbientProgression();
+      this.isLoading = false;
     }
 
     this.updateMediaSession(song);
@@ -559,17 +626,25 @@ class MusicService {
     this.isPlaying = !this.isPlaying;
     this.error = null;
 
-    if (this.isPlaying) {
-      if (this.audioElement && this.currentSong?.audioUrl) {
-        this.audioElement.play().catch(() => this.startAmbientProgression());
+    if (this.currentSong?.provider === 'youtube') {
+      if (this.isPlaying) {
+        youtubePlayerManager.play();
       } else {
-        this.startAmbientProgression();
+        youtubePlayerManager.pause();
       }
     } else {
-      if (this.audioElement) {
-        this.audioElement.pause();
+      if (this.isPlaying) {
+        if (this.audioElement && this.currentSong?.audioUrl) {
+          this.audioElement.play().catch(() => this.startAmbientProgression());
+        } else {
+          this.startAmbientProgression();
+        }
+      } else {
+        if (this.audioElement) {
+          this.audioElement.pause();
+        }
+        this.stopAmbientProgression();
       }
-      this.stopAmbientProgression();
     }
     this.notifyPlayer();
   }
@@ -577,7 +652,10 @@ class MusicService {
   public seekTo(seconds: number) {
     const clamped = Math.max(0, Math.min(seconds, this.duration || 180));
     this.currentTime = clamped;
-    if (this.audioElement && this.currentSong?.audioUrl) {
+
+    if (this.currentSong?.provider === 'youtube') {
+      youtubePlayerManager.seekTo(clamped);
+    } else if (this.audioElement && this.currentSong?.audioUrl) {
       this.audioElement.currentTime = clamped;
     }
     this.notifyPlayer();
@@ -585,6 +663,9 @@ class MusicService {
 
   public setVolume(vol: number) {
     this.volume = Math.max(0, Math.min(1, vol));
+
+    youtubePlayerManager.setVolume(this.volume);
+
     if (this.audioElement) {
       this.audioElement.volume = this.volume;
     }
@@ -597,6 +678,8 @@ class MusicService {
 
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
+    youtubePlayerManager.toggleMute();
+
     if (this.audioElement) {
       this.audioElement.muted = this.isMuted;
     }
@@ -631,6 +714,11 @@ class MusicService {
   }
 
   public async saveTrackOffline(song: Song): Promise<boolean> {
+    if (song.provider === 'youtube') {
+      // As per YouTube ToS, offline video downloading/caching is strictly disallowed.
+      return false;
+    }
+
     if (!song.audioUrl) {
       this.offlineTrackIds.add(song.id);
       this.saveOfflineTracks();
@@ -658,7 +746,10 @@ class MusicService {
 
     if (this.repeatMode === 'one') {
       this.currentTime = 0;
-      if (this.audioElement) {
+      if (this.currentSong.provider === 'youtube') {
+        youtubePlayerManager.seekTo(0);
+        youtubePlayerManager.play();
+      } else if (this.audioElement) {
         this.audioElement.currentTime = 0;
         this.audioElement.play().catch(() => {});
       }
@@ -702,6 +793,9 @@ class MusicService {
     this.currentTime = 0;
     this.error = null;
     this.isLoading = false;
+
+    youtubePlayerManager.pause();
+
     if (this.audioElement) {
       this.audioElement.pause();
       this.audioElement.src = '';

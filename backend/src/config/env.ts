@@ -32,6 +32,7 @@ const envSchema = z.object({
   CLOUDINARY_API_SECRET: z.string().optional(),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   JAMENDO_CLIENT_ID: z.string().optional(),
+  YOUTUBE_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -2,7 +2,24 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Pause, SkipBack, SkipForward, Heart, X, Shuffle, Repeat, Repeat1, Volume2, VolumeX, Loader2, AlertCircle } from 'lucide-react';
+import {
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Heart,
+  X,
+  Shuffle,
+  Repeat,
+  Repeat1,
+  Volume2,
+  VolumeX,
+  Loader2,
+  AlertCircle,
+  Maximize2,
+  Minimize2,
+  Video,
+} from 'lucide-react';
 import { useApp } from '@/stores/app-context';
 import { useRouter } from 'next/navigation';
 import { musicService, PlayerState } from '@/services/music.service';
@@ -12,6 +29,7 @@ export function MiniPlayer() {
   const { currentSong, isPlaying, togglePlay, playNextSong, playPrevSong, triggerHeartEffect, closePlayer } = useApp();
   const [progress, setProgress] = useState(0);
   const [playerState, setPlayerState] = useState<PlayerState | null>(null);
+  const [isVideoExpanded, setIsVideoExpanded] = useState(false);
 
   useEffect(() => {
     const unsub = musicService.subscribePlayer((state) => {
@@ -31,6 +49,8 @@ export function MiniPlayer() {
     musicService.seekTo(targetSeconds);
   };
 
+  const isYouTube = currentSong?.provider === 'youtube';
+
   return (
     <AnimatePresence>
       {currentSong && (
@@ -39,9 +59,11 @@ export function MiniPlayer() {
           animate={{ y: 0, opacity: 1, scale: 1 }}
           exit={{ y: 80, opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="fixed bottom-20 md:bottom-6 right-4 md:right-8 left-4 md:left-auto md:w-96 z-50 pointer-events-auto"
+          className={`fixed bottom-20 md:bottom-6 right-4 md:right-8 left-4 md:left-auto z-50 pointer-events-auto transition-all duration-300 ${
+            isVideoExpanded ? 'md:w-[480px]' : 'md:w-96'
+          }`}
         >
-          <div className="relative rounded-3xl border border-white/10 bg-[#0F0F0F]/95 backdrop-blur-xl p-3 shadow-[0_15px_35px_-10px_rgba(0,0,0,0.9),inset_0_1px_1px_rgba(255,255,255,0.15)] flex flex-col gap-2">
+          <div className="relative rounded-3xl border border-white/10 bg-[#0F0F0F]/95 backdrop-blur-xl p-3.5 shadow-[0_15px_35px_-10px_rgba(0,0,0,0.9),inset_0_1px_1px_rgba(255,255,255,0.15)] flex flex-col gap-2.5">
             {/* Interactive Progress line */}
             <div
               onClick={handleSeek}
@@ -56,35 +78,50 @@ export function MiniPlayer() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-2 pt-1">
+            {/* Official YouTube Video IFrame Container (Compliant with YouTube ToS) */}
+            <div
+              className={`relative overflow-hidden rounded-2xl bg-black border border-white/10 transition-all duration-300 ${
+                isYouTube
+                  ? isVideoExpanded
+                    ? 'h-64 w-full block'
+                    : 'h-40 w-full block'
+                  : 'hidden'
+              }`}
+            >
+              <div id="global-youtube-player-frame" className="w-full h-full" />
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-0.5">
               {/* Song Cover & Info */}
               <div
                 onClick={() => router.push('/music')}
                 className="flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1"
               >
-                <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-white/10 shadow-inner bg-[#1A1A1A]">
-                  <img
-                    src={currentSong.coverUrl}
-                    alt={currentSong.title}
-                    className={`h-full w-full object-cover transition-transform duration-500 ${
-                      isPlaying ? 'scale-105' : 'scale-100'
-                    }`}
-                  />
-                  {isPlaying && !playerState?.isLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                      <div className="flex items-end gap-0.5 h-3">
-                        <span className="w-0.5 h-full bg-white animate-pulse" />
-                        <span className="w-0.5 h-2/3 bg-white animate-pulse delay-75" />
-                        <span className="w-0.5 h-4/5 bg-white animate-pulse delay-150" />
+                {!isYouTube && (
+                  <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-white/10 shadow-inner bg-[#1A1A1A]">
+                    <img
+                      src={currentSong.coverUrl}
+                      alt={currentSong.title}
+                      className={`h-full w-full object-cover transition-transform duration-500 ${
+                        isPlaying ? 'scale-105' : 'scale-100'
+                      }`}
+                    />
+                    {isPlaying && !playerState?.isLoading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                        <div className="flex items-end gap-0.5 h-3">
+                          <span className="w-0.5 h-full bg-white animate-pulse" />
+                          <span className="w-0.5 h-2/3 bg-white animate-pulse delay-75" />
+                          <span className="w-0.5 h-4/5 bg-white animate-pulse delay-150" />
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {playerState?.isLoading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                      <Loader2 className="h-4 w-4 text-white animate-spin" />
-                    </div>
-                  )}
-                </div>
+                    )}
+                    {playerState?.isLoading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                        <Loader2 className="h-4 w-4 text-white animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
@@ -99,8 +136,10 @@ export function MiniPlayer() {
                   </div>
                   <p className="text-[11px] text-[#777777] font-light truncate">
                     {currentSong.artist}
-                    {currentSong.provider === 'jamendo' && (
-                      <span className="ml-1 text-[9px] font-mono text-[#555555]">· Jamendo</span>
+                    {isYouTube && (
+                      <span className="ml-1.5 text-[9px] font-mono px-1.5 py-0.2 rounded bg-red-600/20 text-red-400 border border-red-600/30">
+                        YouTube
+                      </span>
                     )}
                   </p>
                 </div>
@@ -108,6 +147,21 @@ export function MiniPlayer() {
 
               {/* Controls */}
               <div className="flex items-center gap-0.5 shrink-0">
+                {isYouTube && (
+                  <button
+                    onClick={() => setIsVideoExpanded(!isVideoExpanded)}
+                    title={isVideoExpanded ? 'Collapse Video' : 'Expand Video'}
+                    aria-label="Toggle Video Size"
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-[#777777] hover:text-white transition-colors"
+                  >
+                    {isVideoExpanded ? (
+                      <Minimize2 className="h-3.5 w-3.5" />
+                    ) : (
+                      <Maximize2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                )}
+
                 <button
                   onClick={() => musicService.toggleShuffle()}
                   title={playerState?.isShuffle ? 'Shuffle On' : 'Shuffle Off'}
