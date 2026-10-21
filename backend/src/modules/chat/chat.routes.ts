@@ -87,6 +87,15 @@ router.post('/messages', authenticate, requireCouple, async (req: AuthenticatedR
       io.to(`couple:${couple.id}`).emit('message:new', messageJson);
     }
 
+    // Trigger Web Push notification in background
+    const { sendPushToUser } = require('../../services/push.service');
+    sendPushToUser(receiverId, {
+      title: req.user?.name ? `${req.user.name} • Ray` : 'Ray',
+      body: type === 'image' ? '📷 Sent a photo' : type === 'video' ? '📹 Sent a video' : content || 'New message',
+      url: '/chat',
+      data: { messageId: messageJson.id, type: 'chat' },
+    }).catch((err: any) => console.warn('Push delivery warning:', err?.message));
+
     return sendSuccess(res, messageJson, 'Message sent', 201);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to send message';

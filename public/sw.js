@@ -126,3 +126,53 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
 });
+
+// Genuine Background Web Push Notification handler
+self.addEventListener('push', (event) => {
+  let data = { title: 'Ray', body: 'New notification in your sanctuary', url: '/chat' };
+  try {
+    if (event.data) {
+      data = event.data.json();
+    }
+  } catch (e) {
+    if (event.data) {
+      data.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: data.icon || '/icons/icon-192.png',
+    badge: data.badge || '/icons/icon-192.png',
+    data: {
+      url: data.url || '/chat',
+      ...data.data,
+    },
+    vibrate: [100, 50, 100],
+    tag: (data.data && data.data.messageId) || 'ray-notification',
+    renotify: true,
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Ray', options)
+  );
+});
+
+// Handle tap / click on native system notification
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/chat';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(targetUrl) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});

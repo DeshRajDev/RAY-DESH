@@ -39,15 +39,85 @@ class NotificationService {
     }
   }
 
+  public isPushSupported(): boolean {
+    if (typeof window === 'undefined') return false;
+    return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  }
+
   public async requestPermission(): Promise<NotificationPermission> {
     if (typeof window === 'undefined' || !('Notification' in window)) {
       return 'denied';
     }
     try {
-      return await Notification.requestPermission();
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        // Register Web Push subscription automatically
+        await this.subscribeToWebPush();
+      }
+      return permission;
     } catch {
       return 'default';
     }
+  }
+
+  public async subscribeToWebPush(): Promise<boolean> {
+    if (!this.isPushSupported()) return false;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if (!reg || !reg.pushManager) return false;
+
+      // 1. Fetch backend VAPID public key
+      const keyRes = await ApiClient.get<{ success: boolean; data: { publicKey: string } }>('/notifications/vapid-public-key');
+      if (!keyRes || !keyRes.success || !keyRes.data?.publicKey) {
+        return false;
+      }
+
+      const vapidPublicKey = keyRes.data.publicKey;
+      const convertedVapidKey = this.urlBase64ToUint8Array(vapidPublicKey);
+
+      // 2. Subscribe with ServiceWorker PushManager
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedVapidKey as unknown as BufferSource,
+      });
+
+      // 3. Send subscription to backend
+      await ApiClient.post('/notifications/push-subscription', subscription.toJSON());
+      return true;
+    } catch (err) {
+      console.warn('[NotificationService] Web Push subscription error:', err);
+      return false;
+    }
+  }
+
+  public async unsubscribeFromWebPush(): Promise<boolean> {
+    if (!this.isPushSupported()) return false;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg && reg.pushManager) {
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          await sub.unsubscribe();
+          await ApiClient.delete('/notifications/push-subscription', {
+            body: JSON.stringify({ endpoint: sub.endpoint }),
+          });
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private urlBase64ToUint8Array(base64String: string): Uint8Array {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
   }
 
   public async getNotifications(): Promise<ApiResponse<NotificationItem[]>> {

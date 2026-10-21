@@ -16,6 +16,15 @@ export interface IStory extends Document {
   songTitle?: string;
   songArtist?: string;
   caption?: string;
+  durationSeconds?: number;
+  textOverlays?: {
+    text: string;
+    xPercent: number;
+    yPercent: number;
+    color?: string;
+    fontSize?: number;
+    background?: string;
+  }[];
   expiresAt: Date;
   reactions: { emoji: string; userId: mongoose.Types.ObjectId }[];
   replies: IStoryReply[];
@@ -34,6 +43,17 @@ const storySchema = new Schema<IStory>(
     songTitle: { type: String },
     songArtist: { type: String },
     caption: { type: String },
+    durationSeconds: { type: Number, default: 15, min: 15, max: 45 },
+    textOverlays: [
+      {
+        text: { type: String, required: true },
+        xPercent: { type: Number, default: 50 },
+        yPercent: { type: Number, default: 50 },
+        color: { type: String, default: '#FFFFFF' },
+        fontSize: { type: Number, default: 18 },
+        background: { type: String, default: 'rgba(0,0,0,0.5)' },
+      },
+    ],
     expiresAt: {
       type: Date,
       default: () => new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours

@@ -50,7 +50,8 @@ class AuthService {
     if (typeof window !== 'undefined') {
       try {
         const sessionActive = localStorage.getItem(SESSION_KEY);
-        if (sessionActive === 'true') {
+        const token = localStorage.getItem('auth_token');
+        if (sessionActive === 'true' || !!token) {
           this.isSessionActive = true;
         }
 
@@ -72,6 +73,10 @@ class AuthService {
   }
 
   public isAuthenticated(): boolean {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('auth_token');
+      if (token) return true;
+    }
     return this.isSessionActive;
   }
 
@@ -233,11 +238,18 @@ class AuthService {
         this.notify();
         return true;
       }
-    } catch {
-      this.logout();
-      return false;
+    } catch (err: any) {
+      // ONLY logout if server explicitly rejected the token with 401 Unauthorized
+      // Never logout on network hiccups, render cold-starts, offline mode, or timeouts!
+      if (err && (err.status === 401 || err.statusCode === 401)) {
+        this.logout();
+        return false;
+      }
+      // Keep existing authenticated session active during transient network drops
+      console.warn('[AuthService] verifySession failed transiently, preserving local session:', err?.message);
+      return this.isSessionActive;
     }
-    return false;
+    return this.isSessionActive;
   }
 
   public async switchUser(userId: 'user_1' | 'user_2'): Promise<User> {

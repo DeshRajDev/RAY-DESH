@@ -53,4 +53,51 @@ router.post('/mark-all-read', authenticate, requireCouple, async (req: Authentic
   }
 });
 
+// GET VAPID public key
+router.get('/vapid-public-key', (_req: any, res: Response) => {
+  const { env } = require('../../config/env');
+  return sendSuccess(res, { publicKey: env.VAPID_PUBLIC_KEY });
+});
+
+// POST save push subscription
+router.post('/push-subscription', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { endpoint, keys } = req.body;
+    if (!endpoint || !keys || !keys.p256dh || !keys.auth) {
+      return sendError(res, 'Invalid subscription payload', 400);
+    }
+
+    const { PushSubscription } = require('../../models/PushSubscription');
+    const sub = await PushSubscription.findOneAndUpdate(
+      { userId: req.user!.id, endpoint },
+      {
+        userId: req.user!.id,
+        coupleId: req.couple!.id,
+        endpoint,
+        keys,
+        userAgent: req.headers['user-agent'] || '',
+      },
+      { upsert: true, new: true }
+    );
+
+    return sendSuccess(res, { subscribed: true, id: sub._id });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to save push subscription';
+    return sendError(res, msg, 500);
+  }
+});
+
+// DELETE remove push subscription
+router.delete('/push-subscription', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { endpoint } = req.body;
+    const { PushSubscription } = require('../../models/PushSubscription');
+    await PushSubscription.deleteMany({ userId: req.user!.id, ...(endpoint ? { endpoint } : {}) });
+    return sendSuccess(res, { unsubscribed: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to remove push subscription';
+    return sendError(res, msg, 500);
+  }
+});
+
 export const notificationRoutes = router;

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Couple, Song, NotificationItem } from '@/types';
+import { initialCouple } from '@/constants/initial-data';
 import { userService } from '@/services/user.service';
 import { authService } from '@/services/auth.service';
 import { musicService } from '@/services/music.service';
@@ -64,7 +65,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(authService.isAuthenticated());
-  const [couple, setCouple] = useState<Couple | null>(null);
+  const [couple, setCouple] = useState<Couple>(initialCouple);
   const [currentUser, setCurrentUser] = useState<User>(authService.getCurrentUser());
   const [partnerUser, setPartnerUser] = useState<User>(authService.getPartnerUser());
   const [theme, setThemeState] = useState<'dark' | 'light'>('dark');
@@ -92,14 +93,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Fetch initial couple profile
     userService.getCoupleProfile().then(res => {
-      setCouple(res.data ?? null);
+      if (res.data) setCouple(res.data);
       setIsAuthenticated(authService.isAuthenticated());
       setCurrentUser(authService.getCurrentUser());
       setPartnerUser(authService.getPartnerUser());
     });
 
     const unsubscribeCouple = userService.subscribe(updatedCouple => {
-      setCouple(updatedCouple);
+      if (updatedCouple) setCouple(updatedCouple);
       setIsAuthenticated(authService.isAuthenticated());
       setCurrentUser(authService.getCurrentUser());
       setPartnerUser(authService.getPartnerUser());
@@ -258,16 +259,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Tactile sound
   }, []);
 
-  if (!couple) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#050505] text-[#E5E5E5]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#444444] border-t-[#FFFFFF]" />
-          <p className="font-serif text-sm tracking-widest text-[#777777]">ENTERING OUR SANCTUARY...</p>
-        </div>
-      </div>
-    );
-  }
+  // If couple is loading, use local fallback without blocking UI
+  const activeCouple = couple || initialCouple;
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 

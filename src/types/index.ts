@@ -70,6 +70,16 @@ export interface Message {
   updatedAt?: string;
 }
 
+export interface StoryTextOverlay {
+  id: string;
+  text: string;
+  xPercent: number; // 0 - 100
+  yPercent: number; // 0 - 100
+  color?: string;
+  fontSize?: number; // e.g. 14, 18, 24
+  background?: string;
+}
+
 export interface Story {
   id: ID;
   authorId: ID;
@@ -80,6 +90,9 @@ export interface Story {
   backgroundColor?: string;
   songTitle?: string;
   songArtist?: string;
+  songDuration?: number;
+  durationSeconds?: number;
+  textOverlays?: StoryTextOverlay[];
   caption?: string;
   stickers?: string[];
   mentions?: string[];

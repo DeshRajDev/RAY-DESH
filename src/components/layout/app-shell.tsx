@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Sidebar } from './sidebar';
 import { MobileNav } from './mobile-nav';
@@ -10,24 +10,35 @@ import { NotificationDrawer } from '@/components/ui/notification-drawer';
 import { CommandPalette } from '@/components/ui/command-palette';
 import { MediaViewer } from '@/components/ui/media-viewer';
 import { BirthdayCelebration } from '@/components/ui/birthday-celebration';
+import { RayEntrance } from '@/components/ui/ray-entrance';
+import { NotificationPermissionPrompt } from '@/components/ui/notification-permission-prompt';
 import { useApp } from '@/stores/app-context';
 import { Heart, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AnimatePresence } from 'framer-motion';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, floatingHearts } = useApp();
+  const [showEntrance, setShowEntrance] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('ray_intro_shown') !== 'true';
+    }
+    return false;
+  });
 
   const isChat = pathname === '/chat';
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    // Avoid instant redirect if token exists in localStorage (waiting for hydration)
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    if (!isAuthenticated && !token) {
       router.replace('/login');
     }
   }, [isAuthenticated, router]);
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && typeof window !== 'undefined' && !localStorage.getItem('auth_token')) {
     return (
       <div className="flex h-screen h-dvh w-full items-center justify-center bg-[#050505] text-[#E5E5E5] p-4">
         <div className="flex flex-col items-center gap-3 text-center">
@@ -43,7 +54,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen h-dvh w-full overflow-hidden bg-[#050505] text-[#E5E5E5] select-none antialiased">
+    <>
+      <AnimatePresence>
+        {showEntrance && (
+          <RayEntrance onComplete={() => setShowEntrance(false)} />
+        )}
+      </AnimatePresence>
+
+      <div className="flex h-screen h-dvh w-full overflow-hidden bg-[#050505] text-[#E5E5E5] select-none antialiased">
       {/* Left Desktop Sidebar */}
       <Sidebar />
 
@@ -85,6 +103,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <CommandPalette />
       <MediaViewer />
       <BirthdayCelebration />
+      <NotificationPermissionPrompt />
     </div>
+    </>
   );
 }

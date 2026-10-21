@@ -30,8 +30,12 @@ import {
   WifiOff
 } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
+import { useRouter } from 'next/navigation';
 import { Message, MessageAttachment } from '@/types';
 import { chatService, ChatWallpaper, UserPresence } from '@/services/chat.service';
+import { ApiClient } from '@/services/api/client';
+import { compressImage } from '@/lib/media-compress';
+import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { formatDate, formatTime } from '@/lib/date-utils';
 import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -78,7 +82,8 @@ const WALLPAPER_PRESETS: { id: string; name: string; url: string; preview: strin
 ];
 
 export default function ChatPage() {
-  const { user, partner, openMediaViewer, triggerHeartEffect } = useApp();
+  const router = useRouter();
+  const { user, partner, couple, openMediaViewer, triggerHeartEffect } = useApp();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [inputText, setInputText] = useState('');
@@ -235,7 +240,8 @@ export default function ChatPage() {
     setMediaUploadError(null);
 
     try {
-      const uploaded = await chatService.uploadMedia(file);
+      const fileToUpload = await compressImage(file);
+      const uploaded = await chatService.uploadMedia(fileToUpload);
       setActiveAttachment({
         id: `att_${Date.now()}`,
         type: uploaded.type,
@@ -478,7 +484,12 @@ export default function ChatPage() {
               </div>
             ) : (
               filteredMessages.map((msg) => {
-                const isMe = msg.senderId === user.id;
+                const isMe = 
+                  msg.senderId === user.id ||
+                  msg.senderId === (user as any)._id ||
+                  (user.role === 'partner1' && (msg.senderId === 'user_1' || msg.senderId === (couple as any)?.partner1Id || msg.senderId === (couple as any)?.partner1?.id)) ||
+                  (user.role === 'partner2' && (msg.senderId === 'user_2' || msg.senderId === (couple as any)?.partner2Id || msg.senderId === (couple as any)?.partner2?.id)) ||
+                  Boolean((msg as any).senderRole && (msg as any).senderRole === user.role);
 
                 return (
                   <motion.div
@@ -488,6 +499,26 @@ export default function ChatPage() {
                     transition={{ duration: 0.15 }}
                     className={`group relative flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                   >
+                    {/* Story reply card reference if exists */}
+                    {(msg as any).storyReference && (
+                      <div
+                        onClick={() => router.push('/stories')}
+                        className={`mb-1.5 flex items-center gap-2.5 max-w-sm rounded-xl bg-black/60 border border-white/20 p-2 text-left cursor-pointer hover:bg-black/80 transition-colors backdrop-blur-md ${isMe ? 'mr-2' : 'ml-2'}`}
+                      >
+                        {(msg as any).storyReference.mediaUrl && (
+                          <img
+                            src={ApiClient.resolveAssetUrl((msg as any).storyReference.mediaUrl)}
+                            alt="Story"
+                            className="h-10 w-10 rounded-lg object-cover border border-white/10 shrink-0"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-white/50 block">Story Reply</span>
+                          <p className="text-[11px] text-white/90 truncate">{(msg as any).storyReference.caption || 'View Story'}</p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Reply context if exists */}
                     {msg.replyToContent && (
                       <div className={`mb-1 max-w-sm rounded-xl bg-black/60 border border-white/15 px-3 py-1 text-[11px] text-[#AAAAAA] backdrop-blur-sm ${isMe ? 'mr-2' : 'ml-2'}`}>
@@ -531,8 +562,8 @@ export default function ChatPage() {
                       <div
                         className={`relative rounded-2xl px-4 py-2.5 text-xs sm:text-sm shadow-md backdrop-blur-md transition-all max-w-full overflow-hidden ${
                           isMe
-                            ? 'bg-white text-black rounded-tr-none border border-white/90 shadow-[0_4px_12px_rgba(255,255,255,0.12)]'
-                            : 'bg-[#181818]/95 text-white rounded-tl-none border border-white/15 shadow-[0_4px_12px_rgba(0,0,0,0.5)]'
+                            ? 'bg-gradient-to-b from-[#282828] to-[#1C1C1C] text-white rounded-tr-none border border-white/20 shadow-[0_4px_16px_rgba(0,0,0,0.6)]'
+                            : 'bg-[#121212]/95 text-[#EDEDED] rounded-tl-none border border-white/15 shadow-[0_4px_12px_rgba(0,0,0,0.5)]'
                         }`}
                       >
                         {/* Attached Media (Image / Playable Video / Voice) */}
@@ -544,9 +575,9 @@ export default function ChatPage() {
                                 {att.type === 'image' && (
                                   <div className="relative group/media overflow-hidden rounded-xl">
                                     <img
-                                      src={att.url}
+                                      src={ApiClient.resolveAssetUrl(att.url)}
                                       alt="attachment"
-                                      onClick={() => openMediaViewer([att.url])}
+                                      onClick={() => openMediaViewer([ApiClient.resolveAssetUrl(att.url)])}
                                       className="max-h-72 w-auto max-w-full object-cover cursor-pointer rounded-xl hover:opacity-95 transition-opacity"
                                     />
                                     <div className="absolute top-2 right-2 opacity-0 group-hover/media:opacity-100 transition-opacity">
@@ -554,7 +585,7 @@ export default function ChatPage() {
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           const dateStr = new Date(msg.createdAt).toISOString().split('T')[0];
-                                          handleDownloadMedia(att.url, `Ray-Chat-Photo-${dateStr}.jpg`);
+                                          handleDownloadMedia(ApiClient.resolveAssetUrl(att.url), `Ray-Chat-Photo-${dateStr}.jpg`);
                                         }}
                                         title="Download original photo"
                                         className="p-1.5 rounded-full bg-black/75 backdrop-blur-md text-white border border-white/20 hover:scale-110 active:scale-95 transition-transform"
@@ -569,7 +600,7 @@ export default function ChatPage() {
                                 {att.type === 'video' && (
                                   <div className="relative group/media overflow-hidden rounded-xl bg-black border border-white/10">
                                     <video
-                                      src={att.url}
+                                      src={ApiClient.resolveAssetUrl(att.url)}
                                       controls
                                       playsInline
                                       preload="metadata"
@@ -579,7 +610,7 @@ export default function ChatPage() {
                                       <button
                                         onClick={() => {
                                           const dateStr = new Date(msg.createdAt).toISOString().split('T')[0];
-                                          handleDownloadMedia(att.url, `Ray-Chat-Video-${dateStr}.mp4`);
+                                          handleDownloadMedia(ApiClient.resolveAssetUrl(att.url), `Ray-Chat-Video-${dateStr}.mp4`);
                                         }}
                                         title="Download original video"
                                         className="p-1.5 rounded-full bg-black/75 backdrop-blur-md text-white border border-white/20 hover:scale-110 active:scale-95 transition-transform"
@@ -847,31 +878,17 @@ export default function ChatPage() {
             </button>
           </form>
 
-          {/* Inline Emoji Selector Bar if toggled */}
+          {/* Full Searchable Unicode Emoji Picker */}
           {showEmojiPicker && (
-            <div className="mt-3 flex items-center justify-between rounded-2xl bg-[#141414] border border-white/10 p-2.5">
-              <div className="flex flex-wrap gap-2">
-                {POPULAR_REACTIONS.map(emoji => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => {
-                      setInputText(prev => prev + emoji);
-                      chatService.sendTyping(user.id);
-                      if (emoji === '❤️') triggerHeartEffect();
-                    }}
-                    className="h-8 w-8 rounded-lg hover:bg-white/10 text-base flex items-center justify-center transition-transform hover:scale-125"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setShowEmojiPicker(false)}
-                className="text-xs text-[#777777] hover:text-white px-2 font-mono"
-              >
-                Close
-              </button>
+            <div className="absolute bottom-20 left-3 sm:left-6 z-50">
+              <EmojiPicker
+                onSelect={(emoji) => {
+                  setInputText(prev => prev + emoji);
+                  chatService.sendTyping(user.id);
+                  if (emoji === '❤️') triggerHeartEffect();
+                }}
+                onClose={() => setShowEmojiPicker(false)}
+              />
             </div>
           )}
         </div>

@@ -33,6 +33,9 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   JAMENDO_CLIENT_ID: z.string().optional(),
   YOUTUBE_API_KEY: z.string().optional(),
+  VAPID_PUBLIC_KEY: z.string().default('BLFzG-mYjRmaxB9jUcTkGARwfFbjJX0NmSuWucuiHoAoVx8xS3pS7BVND4jl8AhzqHHdIaD4-S5glMKqZ02N8w4'),
+  VAPID_PRIVATE_KEY: z.string().default('ovDjDQXKTJ83posPdkb1-6Bkn-xJ3clvLUrCAsNLHy4'),
+  VAPID_SUBJECT: z.string().default('mailto:admin@couple.local'),
 });
 
 const parsed = envSchema.safeParse(process.env);
