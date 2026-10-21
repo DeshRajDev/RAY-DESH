@@ -62,8 +62,12 @@ export function Sidebar() {
       <div className="space-y-4">
         <div className="flex items-center justify-between px-2">
           <Link href="/dashboard" className="flex items-center gap-2.5 group">
-            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] group-hover:scale-105 transition-transform">
-              <Heart className="h-4 w-4 fill-white text-white" />
+            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/20 shadow-[0_4px_12px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)] group-hover:scale-105 transition-transform">
+              <img
+                src="/icons/ray-logo-cute-web.png"
+                alt="Ray — किरण"
+                className="h-7 w-7 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
+              />
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-1.5 leading-tight">

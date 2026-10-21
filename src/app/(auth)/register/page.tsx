@@ -27,8 +27,12 @@ export default function RegisterPage() {
         className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#0C0C0C] p-5 sm:p-10 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95),inset_0_1px_1px_rgba(255,255,255,0.15)] space-y-6"
       >
         <div className="text-center space-y-2">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/20 shadow-lg">
-            <Heart className="h-6 w-6 fill-white text-white" />
+          <div className="relative mx-auto flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/20 shadow-lg">
+            <img
+              src="/icons/ray-logo-cute-web.png"
+              alt="Ray — किरण"
+              className="h-10 w-10 object-contain drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]"
+            />
           </div>
           <div className="inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10">
             <span className="font-serif tracking-widest text-xs font-semibold text-white">Ray</span>

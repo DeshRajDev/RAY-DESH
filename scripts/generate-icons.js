@@ -2,59 +2,145 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 
-const dir = path.join(process.cwd(), 'public', 'icons');
-if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+async function generateIcons() {
+  const sourcePath = path.join(__dirname, '..', 'public', 'icons', 'Ray-logo-cute.png');
+  const iconsDir = path.join(__dirname, '..', 'public', 'icons');
+  const publicDir = path.join(__dirname, '..', 'public');
+  const appDir = path.join(__dirname, '..', 'src', 'app');
 
-const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <radialGradient id="bgGrad" cx="50%" cy="30%" r="75%">
-      <stop offset="0%" stop-color="#222222"/>
-      <stop offset="60%" stop-color="#0a0a0a"/>
-      <stop offset="100%" stop-color="#040404"/>
-    </radialGradient>
-    <linearGradient id="heartGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#cccccc"/>
-    </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="12" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.85"/>
-    </filter>
-  </defs>
+  if (!fs.existsSync(sourcePath)) {
+    console.error('Source icon not found:', sourcePath);
+    process.exit(1);
+  }
 
-  <!-- Base background -->
-  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
-  <rect width="508" height="508" x="2" y="2" rx="110" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="4"/>
+  console.log('Generating crisp icons from Ray-logo-cute.png...');
 
-  <!-- Ray beam circles -->
-  <circle cx="256" cy="240" r="180" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1.5"/>
-  <circle cx="256" cy="240" r="140" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.5"/>
+  // 1. Standard transparent PNG icons
+  const standardSizes = [
+    { size: 512, name: 'icon-512.png' },
+    { size: 384, name: 'icon-384.png' },
+    { size: 192, name: 'icon-192.png' },
+    { size: 144, name: 'icon-144.png' },
+    { size: 96, name: 'icon-96.png' },
+    { size: 72, name: 'icon-72.png' },
+    { size: 48, name: 'icon-48.png' },
+    { size: 32, name: 'icon-32.png' },
+    { size: 16, name: 'icon-16.png' },
+  ];
 
-  <!-- Radiant Central Heart -->
-  <g filter="url(#shadow)">
-    <path d="M256 360 C256 360 140 280 140 200 C140 155 175 120 220 120 C240 120 252 130 256 135 C260 130 272 120 292 120 C337 120 372 155 372 200 C372 280 256 360 256 360 Z"
-      fill="url(#heartGrad)" filter="url(#glow)"/>
-  </g>
+  for (const { size, name } of standardSizes) {
+    await sharp(sourcePath)
+      .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png({ quality: 95, compressionLevel: 9 })
+      .toFile(path.join(iconsDir, name));
+    console.log(`✓ Generated ${name} (${size}x${size})`);
+  }
 
-  <!-- Brand Typography: Ray — किरण -->
-  <text x="256" y="420" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="600" letter-spacing="3">RAY</text>
-  <text x="256" y="456" text-anchor="middle" fill="rgba(255,255,255,0.65)" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="500" letter-spacing="2">किरण</text>
-</svg>`;
+  // 2. High-performance optimized UI logo (256x256 & 512x512) for in-app display
+  await sharp(sourcePath)
+    .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png({ quality: 95, compressionLevel: 9 })
+    .toFile(path.join(iconsDir, 'ray-logo-cute-web.png'));
 
-fs.writeFileSync(path.join(dir, 'icon.svg'), svg);
+  // Also replace or supplement public/icons/Ray-logo.png with the new cute logo
+  await sharp(sourcePath)
+    .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png({ quality: 95, compressionLevel: 9 })
+    .toFile(path.join(iconsDir, 'Ray-logo.png'));
+  console.log('✓ Generated UI logo assets (ray-logo-cute-web.png, Ray-logo.png)');
 
-async function generate() {
-  await sharp(Buffer.from(svg)).resize(192, 192).png().toFile(path.join(dir, 'icon-192.png'));
-  await sharp(Buffer.from(svg)).resize(512, 512).png().toFile(path.join(dir, 'icon-512.png'));
-  await sharp(Buffer.from(svg)).resize(180, 180).png().toFile(path.join(dir, 'apple-touch-icon.png'));
-  
-  // Maskable icon with safe-padding
-  const maskableSvg = svg.replace('rx="112"', 'rx="0"');
-  await sharp(Buffer.from(maskableSvg)).resize(512, 512).png().toFile(path.join(dir, 'icon-maskable.png'));
-  console.log('✅ Icons generated successfully in public/icons/');
+  // 3. Apple Touch Icon (180x180) on dark luxury background #070707 with safe zone
+  const appleInner = await sharp(sourcePath)
+    .resize(150, 150, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .toBuffer();
+
+  await sharp({
+    create: {
+      width: 180,
+      height: 180,
+      channels: 4,
+      background: { r: 7, g: 7, b: 7, alpha: 1 }
+    }
+  })
+    .composite([{ input: appleInner, gravity: 'center' }])
+    .png()
+    .toFile(path.join(iconsDir, 'apple-touch-icon.png'));
+
+  // Also write to src/app/apple-icon.png for Next.js App router
+  await sharp({
+    create: {
+      width: 180,
+      height: 180,
+      channels: 4,
+      background: { r: 7, g: 7, b: 7, alpha: 1 }
+    }
+  })
+    .composite([{ input: appleInner, gravity: 'center' }])
+    .png()
+    .toFile(path.join(appDir, 'apple-icon.png'));
+  console.log('✓ Generated apple-touch-icon.png & src/app/apple-icon.png');
+
+  // 4. Android Maskable Icon (512x512) - inner 80% safe area with #070707 background
+  const maskableInner = await sharp(sourcePath)
+    .resize(410, 410, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .toBuffer();
+
+  await sharp({
+    create: {
+      width: 512,
+      height: 512,
+      channels: 4,
+      background: { r: 7, g: 7, b: 7, alpha: 1 }
+    }
+  })
+    .composite([{ input: maskableInner, gravity: 'center' }])
+    .png()
+    .toFile(path.join(iconsDir, 'icon-maskable.png'));
+  console.log('✓ Generated icon-maskable.png');
+
+  // 5. Next.js App Router App Icon & Favicon
+  await sharp(sourcePath)
+    .resize(48, 48, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toFile(path.join(appDir, 'icon.png'));
+
+  await sharp(sourcePath)
+    .resize(32, 32, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toFile(path.join(publicDir, 'favicon.png'));
+
+  // Also copy/generate favicon.ico
+  // Convert 32x32 PNG to .ico format (single image ICO container)
+  const png32 = await sharp(sourcePath)
+    .resize(32, 32, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
+
+  // Simple ICO header wrapping PNG buffer
+  const icoHeader = Buffer.alloc(6);
+  icoHeader.writeUInt16LE(0, 0); // Reserved
+  icoHeader.writeUInt16LE(1, 2); // Type 1 = ICO
+  icoHeader.writeUInt16LE(1, 4); // Number of images = 1
+
+  const icoDirEntry = Buffer.alloc(16);
+  icoDirEntry.writeUInt8(32, 0); // Width
+  icoDirEntry.writeUInt8(32, 1); // Height
+  icoDirEntry.writeUInt8(0, 2); // Color palette
+  icoDirEntry.writeUInt8(0, 3); // Reserved
+  icoDirEntry.writeUInt16LE(1, 4); // Color planes
+  icoDirEntry.writeUInt16LE(32, 6); // Bits per pixel
+  icoDirEntry.writeUInt32LE(png32.length, 8); // Image size in bytes
+  icoDirEntry.writeUInt32LE(6 + 16, 12); // Offset to image data
+
+  const icoBuffer = Buffer.concat([icoHeader, icoDirEntry, png32]);
+  fs.writeFileSync(path.join(publicDir, 'favicon.ico'), icoBuffer);
+  fs.writeFileSync(path.join(appDir, 'favicon.ico'), icoBuffer);
+  console.log('✓ Generated favicon.ico, favicon.png, and src/app/icon.png');
+
+  console.log('All icons generated successfully!');
 }
 
-generate().catch(console.error);
+generateIcons().catch(err => {
+  console.error('Error generating icons:', err);
+  process.exit(1);
+});

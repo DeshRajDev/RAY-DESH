@@ -29,8 +29,12 @@ export default function OfflinePage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#050505] p-4 text-[#E5E5E5] select-none">
       <div className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#0C0C0C] p-6 sm:p-10 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95),inset_0_1px_1px_rgba(255,255,255,0.15)] text-center space-y-6">
         {/* Brand Icon Header */}
-        <div className="mx-auto relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-b from-[#222222] to-[#111111] border border-white/20 shadow-lg">
-          <Heart className="h-8 w-8 fill-white text-white opacity-80" />
+        <div className="mx-auto relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-[#222222] to-[#111111] border border-white/20 shadow-lg">
+          <img
+            src="/icons/ray-logo-cute-web.png"
+            alt="Ray — किरण"
+            className="h-12 w-12 object-contain"
+          />
           <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-rose-500/90 text-white shadow-md">
             <WifiOff className="h-3 w-3" />
           </div>

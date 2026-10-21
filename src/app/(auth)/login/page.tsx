@@ -58,8 +58,12 @@ export default function LoginPage() {
       >
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/20 shadow-[0_4px_16px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)]">
-            <Heart className="h-7 w-7 fill-white text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]" />
+          <div className="relative mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/20 shadow-[0_4px_16px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.2)]">
+            <img
+              src="/icons/ray-logo-cute-web.png"
+              alt="Ray — किरण"
+              className="h-12 w-12 object-contain drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]"
+            />
           </div>
           <div className="flex items-center justify-center gap-2">
             <h1 className="font-serif text-2xl sm:text-3xl text-white font-light tracking-tight">

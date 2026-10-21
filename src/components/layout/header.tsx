@@ -21,8 +21,12 @@ export function Header() {
       {/* Mobile brand & left indicator */}
       <div className="flex items-center gap-2 md:hidden min-w-0">
         <Link href="/dashboard" className="flex items-center gap-2 min-w-0 group">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#1A1A1A] border border-white/15 shadow-inner">
-            <Heart className="h-4 w-4 fill-white text-white" />
+          <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-b from-[#252525] to-[#121212] border border-white/20 shadow-inner group-hover:scale-105 transition-transform">
+            <img
+              src="/icons/ray-logo-cute-web.png"
+              alt="Ray — किरण"
+              className="h-6 w-6 object-contain"
+            />
           </div>
           <div className="flex items-baseline gap-1 min-w-0">
             <span className="font-serif text-sm font-medium text-white tracking-wide">Ray</span>
