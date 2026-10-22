@@ -12,7 +12,8 @@
     "seed": "ts-node --transpile-only src/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "generate-vapid-keys": "node scripts/generate-vapid-keys.js"
   },
   "dependencies": {
     "@types/web-push": "^3.6.4",

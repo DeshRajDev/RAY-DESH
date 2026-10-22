@@ -4,12 +4,37 @@ import { logger } from '../utils/logger';
 import { PushSubscription } from '../models/PushSubscription';
 import mongoose from 'mongoose';
 
-// Configure VAPID details
-webpush.setVapidDetails(
-  env.VAPID_SUBJECT,
-  env.VAPID_PUBLIC_KEY,
-  env.VAPID_PRIVATE_KEY
-);
+let isVapidInitialized = false;
+
+export function initVapid(): boolean {
+  if (isVapidInitialized) return true;
+
+  const publicKey = env.VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY;
+  const privateKey = env.VAPID_PRIVATE_KEY || process.env.VAPID_PRIVATE_KEY;
+  const subject = env.VAPID_SUBJECT || process.env.VAPID_SUBJECT || 'mailto:contact@ray.app';
+
+  if (!publicKey || !privateKey) {
+    logger.warn('⚠️ Web Push VAPID keys not configured in environment. Push notifications are disabled until VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are set.');
+    return false;
+  }
+
+  try {
+    webpush.setVapidDetails(subject, publicKey, privateKey);
+    isVapidInitialized = true;
+    logger.info('✅ Web Push VAPID configuration initialized successfully.');
+    return true;
+  } catch (err: any) {
+    logger.error('❌ Failed to initialize Web Push VAPID details: ' + (err?.message || 'Invalid keys'));
+    return false;
+  }
+}
+
+// Attempt validation at startup without crashing
+initVapid();
+
+export function isPushConfigured(): boolean {
+  return initVapid();
+}
 
 export interface PushNotificationPayload {
   title: string;
@@ -25,6 +50,10 @@ export async function sendPushToUser(
   payload: PushNotificationPayload
 ): Promise<{ sent: number; failed: number }> {
   try {
+    if (!initVapid()) {
+      return { sent: 0, failed: 0 };
+    }
+
     const subscriptions = await PushSubscription.find({ userId: new mongoose.Types.ObjectId(userId) });
     if (!subscriptions || subscriptions.length === 0) {
       return { sent: 0, failed: 0 };

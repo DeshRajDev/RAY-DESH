@@ -66,22 +66,38 @@ class NotificationService {
       const reg = await navigator.serviceWorker.ready;
       if (!reg || !reg.pushManager) return false;
 
-      // 1. Fetch backend VAPID public key
-      const keyRes = await ApiClient.get<{ success: boolean; data: { publicKey: string } }>('/notifications/vapid-public-key');
-      if (!keyRes || !keyRes.success || !keyRes.data?.publicKey) {
+      // 1. Fetch backend VAPID public key (prefer backend endpoint, fallback to env)
+      let vapidPublicKey: string | null = null;
+      try {
+        const keyRes = await ApiClient.get<{ success: boolean; data: { publicKey: string } }>('/notifications/vapid-public-key');
+        if (keyRes && keyRes.success && keyRes.data?.publicKey) {
+          vapidPublicKey = keyRes.data.publicKey;
+        }
+      } catch (err) {
+        console.warn('[NotificationService] Failed to retrieve VAPID key from backend:', err);
+      }
+
+      if (!vapidPublicKey && typeof process !== 'undefined' && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
+        vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      }
+
+      if (!vapidPublicKey) {
+        console.warn('[NotificationService] VAPID public key unavailable on server and client. Push subscription deferred.');
         return false;
       }
 
-      const vapidPublicKey = keyRes.data.publicKey;
       const convertedVapidKey = this.urlBase64ToUint8Array(vapidPublicKey);
 
-      // 2. Subscribe with ServiceWorker PushManager
-      const subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: convertedVapidKey as unknown as BufferSource,
-      });
+      // 2. Check for existing subscription or create new one
+      let subscription = await reg.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedVapidKey as unknown as BufferSource,
+        });
+      }
 
-      // 3. Send subscription to backend
+      // 3. Send subscription to backend to persist with authenticated user
       await ApiClient.post('/notifications/push-subscription', subscription.toJSON());
       return true;
     } catch (err) {

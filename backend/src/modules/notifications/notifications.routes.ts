@@ -56,7 +56,15 @@ router.post('/mark-all-read', authenticate, requireCouple, async (req: Authentic
 // GET VAPID public key
 router.get('/vapid-public-key', (_req: any, res: Response) => {
   const { env } = require('../../config/env');
-  return sendSuccess(res, { publicKey: env.VAPID_PUBLIC_KEY });
+  const publicKey = env.VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY;
+  if (!publicKey) {
+    return sendError(
+      res,
+      'Web Push VAPID public key is not configured on this server. Please set VAPID_PUBLIC_KEY in your environment.',
+      503
+    );
+  }
+  return sendSuccess(res, { publicKey });
 });
 
 // POST save push subscription
