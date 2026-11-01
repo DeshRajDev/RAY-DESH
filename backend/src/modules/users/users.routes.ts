@@ -23,7 +23,11 @@ router.get('/partner', authenticate, requireCouple, async (req: AuthenticatedReq
       return sendError(res, 'Partner not found', 404);
     }
     const partnerJson = partner.toJSON();
-    if (partnerJson.name === 'Rey') partnerJson.name = 'Ray';
+    if (partnerJson.role === 'partner2' && (partnerJson.name === 'Desh' || partnerJson.name === 'Rey' || !partnerJson.name)) {
+      partnerJson.name = 'Ray';
+    } else if (partnerJson.role === 'partner1' && (partnerJson.name === 'Ray' || partnerJson.name === 'Rey' || !partnerJson.name)) {
+      partnerJson.name = 'Desh';
+    }
     return sendSuccess(res, partnerJson);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to fetch partner';
@@ -42,8 +46,22 @@ router.get('/profiles', authenticate, requireCouple, async (req: AuthenticatedRe
 
     const meJson = me?.toJSON();
     const partnerJson = partner?.toJSON();
-    if (meJson?.name === 'Rey') meJson.name = 'Ray';
-    if (partnerJson?.name === 'Rey') partnerJson.name = 'Ray';
+    
+    if (meJson) {
+      if (meJson.role === 'partner2' && (meJson.name === 'Desh' || meJson.name === 'Rey' || !meJson.name)) {
+        meJson.name = 'Ray';
+      } else if (meJson.role === 'partner1' && (meJson.name === 'Ray' || meJson.name === 'Rey' || !meJson.name)) {
+        meJson.name = 'Desh';
+      }
+    }
+
+    if (partnerJson) {
+      if (partnerJson.role === 'partner2' && (partnerJson.name === 'Desh' || partnerJson.name === 'Rey' || !partnerJson.name)) {
+        partnerJson.name = 'Ray';
+      } else if (partnerJson.role === 'partner1' && (partnerJson.name === 'Ray' || partnerJson.name === 'Rey' || !partnerJson.name)) {
+        partnerJson.name = 'Desh';
+      }
+    }
 
     return sendSuccess(res, {
       me: meJson,
@@ -95,6 +113,12 @@ router.patch('/profile', authenticate, async (req: AuthenticatedRequest, res: Re
       if (req.body[key] !== undefined) {
         updates[key] = req.body[key];
       }
+    }
+
+    if (req.user!.role === 'partner2' && (updates.name === 'Desh' || updates.name === 'Rey')) {
+      updates.name = 'Ray';
+    } else if (req.user!.role === 'partner1' && (updates.name === 'Ray' || updates.name === 'Rey')) {
+      updates.name = 'Desh';
     }
 
     const updated = await User.findByIdAndUpdate(req.user!.id, updates, { new: true });

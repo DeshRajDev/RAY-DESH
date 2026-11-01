@@ -11,7 +11,9 @@ const router = Router();
 // GET partner feed posts
 router.get('/', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const posts = await Post.find({ coupleId: req.couple!.id }).sort({ isPinned: -1, createdAt: -1 });
+    const posts = await Post.find({ coupleId: req.couple!.id })
+      .populate('authorId', 'name avatar nickname role')
+      .sort({ isPinned: -1, createdAt: -1 });
     return sendSuccess(res, posts.map((p: any) => p.toJSON()));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to fetch posts';
@@ -37,6 +39,8 @@ router.post('/', authenticate, requireCouple, async (req: AuthenticatedRequest, 
       comments: [],
       isPinned: false,
     });
+
+    await post.populate('authorId', 'name avatar nickname role');
 
     return sendSuccess(res, post.toJSON(), 'Post created', 201);
   } catch (err: unknown) {

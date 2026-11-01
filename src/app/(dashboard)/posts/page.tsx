@@ -10,6 +10,7 @@ import { formatDate } from '@/lib/date-utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MediaPickerModal } from '@/components/media/MediaPickerModal';
 import { UserAvatar } from '@/components/ui/user-avatar';
+import { resolveAuthorName, resolveAuthorAvatar, isCurrentUser } from '@/lib/identity';
 
 export default function PostsFeedPage() {
   const { user, partner, openMediaViewer, triggerHeartEffect } = useApp();
@@ -173,16 +174,14 @@ export default function PostsFeedPage() {
               <div className="p-5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <UserAvatar
-                    src={
-                      post.authorId === user.id || post.authorName?.toLowerCase() === user.name?.toLowerCase()
-                        ? user.avatar || post.authorAvatar
-                        : partner.avatar || post.authorAvatar
-                    }
-                    name={post.authorName}
+                    src={resolveAuthorAvatar(post.authorId || post.authorName, user, partner, post.authorAvatar)}
+                    name={resolveAuthorName(post.authorId || post.authorName, user, partner, post.authorName)}
                     size="md"
                   />
                   <div>
-                    <h4 className="font-serif text-sm text-white font-normal">{post.authorName}</h4>
+                    <h4 className="font-serif text-sm text-white font-normal">
+                      {resolveAuthorName(post.authorId || post.authorName, user, partner, post.authorName)}
+                    </h4>
                     <p className="text-[11px] font-mono text-[#777777]">{formatDate(post.date, 'medium')}</p>
                   </div>
                 </div>
@@ -248,17 +247,15 @@ export default function PostsFeedPage() {
                   {post.comments.map(c => (
                     <div key={c.id} className="flex items-start gap-2.5">
                       <UserAvatar
-                        src={
-                          c.userId === user.id || c.userName?.toLowerCase() === user.name?.toLowerCase()
-                            ? user.avatar || c.userAvatar
-                            : partner.avatar || c.userAvatar
-                        }
-                        name={c.userName}
+                        src={resolveAuthorAvatar(c.userId || c.userName, user, partner, c.userAvatar)}
+                        name={resolveAuthorName(c.userId || c.userName, user, partner, c.userName)}
                         size="xs"
                         className="mt-0.5"
                       />
                       <div className="text-xs">
-                        <span className="font-serif text-white mr-1.5">{c.userName}:</span>
+                        <span className="font-serif text-white mr-1.5">
+                          {resolveAuthorName(c.userId || c.userName, user, partner, c.userName)}:
+                        </span>
                         <span className="text-[#AAAAAA] font-light">{c.text}</span>
                       </div>
                     </div>

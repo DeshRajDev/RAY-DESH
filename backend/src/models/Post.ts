@@ -57,7 +57,21 @@ const postSchema = new Schema<IPost>(
       virtuals: true,
       transform: (_doc: any, ret: any) => {
         ret.id = ret._id.toString();
-        ret.authorId = ret.authorId?.toString();
+        if (ret.authorId && typeof ret.authorId === 'object' && ret.authorId._id) {
+          const authObj = ret.authorId;
+          const aName = (authObj.role === 'partner2' && (authObj.name === 'Desh' || authObj.name === 'Rey')) ? 'Ray' : (authObj.role === 'partner1' && authObj.name === 'Ray') ? 'Desh' : (authObj.name || (authObj.role === 'partner1' ? 'Desh' : 'Ray'));
+          ret.author = {
+            id: authObj._id.toString(),
+            name: aName,
+            avatar: authObj.avatar || '',
+            role: authObj.role,
+          };
+          ret.authorName = aName;
+          ret.authorAvatar = authObj.avatar || '';
+          ret.authorId = authObj._id.toString();
+        } else {
+          ret.authorId = ret.authorId?.toString();
+        }
         ret.coupleId = ret.coupleId?.toString();
         delete ret._id;
         delete ret.__v;

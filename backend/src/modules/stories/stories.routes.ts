@@ -15,7 +15,9 @@ router.get('/', authenticate, requireCouple, async (req: AuthenticatedRequest, r
       coupleId: req.couple!.id,
       expiresAt: { $gt: new Date() },
       isArchived: false,
-    }).sort({ createdAt: 1 });
+    })
+      .populate('authorId', 'name avatar nickname role')
+      .sort({ createdAt: 1 });
 
     return sendSuccess(res, stories.map((s: any) => s.toJSON()));
   } catch (err: unknown) {
@@ -58,6 +60,8 @@ router.post('/', authenticate, requireCouple, async (req: AuthenticatedRequest, 
       replies: [],
       isArchived: false,
     });
+
+    await story.populate('authorId', 'name avatar nickname role');
 
     return sendSuccess(res, story.toJSON(), 'Story posted', 201);
   } catch (err: unknown) {

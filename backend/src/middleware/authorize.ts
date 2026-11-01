@@ -25,8 +25,11 @@ export function requireCouple(
   }
 
   // Verify that the user is genuinely one of the 2 partners
-  const isPartner1 = req.couple.partner1Id.toString() === req.user.id;
-  const isPartner2 = req.couple.partner2Id.toString() === req.user.id;
+  const p1 = (req.couple.partner1Id?._id || req.couple.partner1Id || (req.couple as any).partner1?._id || (req.couple as any).partner1 || '').toString();
+  const p2 = (req.couple.partner2Id?._id || req.couple.partner2Id || (req.couple as any).partner2?._id || (req.couple as any).partner2 || '').toString();
+
+  const isPartner1 = p1 === req.user.id;
+  const isPartner2 = p2 === req.user.id;
 
   if (!isPartner1 && !isPartner2) {
     sendError(res, 'Forbidden: You are not a member of this couple sanctuary.', 403, 'FORBIDDEN', undefined, req.requestId);

@@ -11,6 +11,7 @@ export interface AuthCredentials {
 export const ACCOUNTS = {
   desh: {
     id: 'user_1',
+    mongoId: '6ad5228158634ec577ea3c5c',
     email: 'desh@couple.local',
     phoneNumber: '8580962780',
     username: 'desh',
@@ -21,6 +22,7 @@ export const ACCOUNTS = {
   },
   ray: {
     id: 'user_2',
+    mongoId: '6ad5228158634ec577ea3c61',
     email: 'ray@couple.local',
     phoneNumber: '9015006850',
     username: 'ray',
@@ -31,6 +33,7 @@ export const ACCOUNTS = {
   },
   rey: {
     id: 'user_2',
+    mongoId: '6ad5228158634ec577ea3c61',
     email: 'ray@couple.local',
     phoneNumber: '9015006850',
     username: 'ray',
@@ -218,12 +221,16 @@ class AuthService {
   private mapBackendUser(raw: any, roleKey: 'user_1' | 'user_2'): User {
     const defaultAvatar = roleKey === 'user_1' ? currentUser.avatar : partnerUser.avatar;
     let name = raw.name || (roleKey === 'user_1' ? 'Desh' : 'Ray');
-    if (name === 'Rey') name = 'Ray';
+    if (roleKey === 'user_2' && (name === 'Desh' || name === 'Rey')) name = 'Ray';
+    if (roleKey === 'user_1' && (name === 'Ray' || name === 'Rey')) name = 'Desh';
+
+    const fallbackMongoId = roleKey === 'user_1' ? '6ad5228158634ec577ea3c5c' : '6ad5228158634ec577ea3c61';
+    const mongoId = String(raw.id || raw._id || fallbackMongoId).trim();
 
     return {
       id: roleKey,
-      _id: raw.id || raw._id,
-      mongoId: raw.id || raw._id,
+      _id: mongoId,
+      mongoId,
       name,
       nickname: raw.nickname || '',
       email: raw.email,
@@ -366,6 +373,15 @@ class AuthService {
       } catch {
         // ignore
       }
+    }
+
+    try {
+      const { chatService } = require('./chat.service');
+      if (chatService && typeof chatService.disconnectSocket === 'function') {
+        chatService.disconnectSocket();
+      }
+    } catch {
+      // ignore
     }
     this.notify();
   }

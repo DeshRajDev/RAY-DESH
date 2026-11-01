@@ -52,7 +52,9 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
         }
       }
 
-      const receiverId = couple.partner1Id.toString() === user.id ? couple.partner2Id : couple.partner1Id;
+      const p1 = (couple.partner1Id?._id || couple.partner1Id || couple.partner1 || '').toString();
+      const p2 = (couple.partner2Id?._id || couple.partner2Id || couple.partner2 || '').toString();
+      const receiverId = p1 === user.id ? p2 : p1;
 
       const message = await Message.create({
         coupleId: new mongoose.Types.ObjectId(couple.id),

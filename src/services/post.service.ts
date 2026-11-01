@@ -45,12 +45,23 @@ class PostService {
       if (typeof window !== 'undefined') {
         const res = await ApiClient.getInstance().get<{ success: boolean; data: any[] }>('/posts');
         if (res && res.success && Array.isArray(res.data)) {
-          const formatted: Post[] = res.data.map(item => ({
-            id: item.id || item._id,
-            authorId: item.authorId,
-            authorName: item.authorName || 'Partner',
-            authorAvatar: item.authorAvatar || '',
-            type: (item.mediaUrls && item.mediaUrls.length > 0 ? 'photo' : 'text') as Post['type'],
+          const formatted: Post[] = res.data.map(item => {
+            const authorId = String(item.authorId || item.author?.id || '').trim();
+            let authorName = item.authorName || item.author?.name;
+            let authorAvatar = item.authorAvatar || item.author?.avatar;
+            if (!authorName) {
+              if (authorId === '6ad5228158634ec577ea3c5c' || authorId === 'user_1') authorName = 'Desh';
+              else if (authorId === '6ad5228158634ec577ea3c61' || authorId === 'user_2') authorName = 'Ray';
+              else authorName = 'Partner';
+            }
+            if (authorName === 'Rey') authorName = 'Ray';
+
+            return {
+              id: item.id || item._id,
+              authorId: item.authorId,
+              authorName,
+              authorAvatar: authorAvatar || '',
+              type: (item.mediaUrls && item.mediaUrls.length > 0 ? 'photo' : 'text') as Post['type'],
             content: item.caption || item.content || '',
             mediaUrls: item.mediaUrls || [],
             location: item.location,

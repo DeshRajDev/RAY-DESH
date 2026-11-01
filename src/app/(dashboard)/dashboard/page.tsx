@@ -127,7 +127,7 @@ export default function DashboardPage() {
                 Today is Ray&apos;s Birthday Celebration! 🎂
               </p>
               <p className="text-[10px] font-mono text-[#888888]">
-                Asia/Kolkata • November 1, 2026
+                Asia/Kolkata • November 1 – November 2, 2026
               </p>
             </div>
           </div>

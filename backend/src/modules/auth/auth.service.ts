@@ -110,8 +110,10 @@ export class AuthService {
 
     user.isOnline = true;
     user.lastSeen = 'Active just now';
-    if (user.name === 'Rey') {
+    if (user.role === 'partner2' && (user.name === 'Desh' || user.name === 'Rey' || !user.name)) {
       user.name = 'Ray';
+    } else if (user.role === 'partner1' && (user.name === 'Ray' || user.name === 'Rey' || !user.name)) {
+      user.name = 'Desh';
     }
     await user.save();
 
@@ -131,7 +133,8 @@ export class AuthService {
     const refreshToken = signRefreshToken(tokenPayload);
 
     const userJson = user.toJSON();
-    if (userJson.name === 'Rey') userJson.name = 'Ray';
+    if (userJson.role === 'partner2' && (userJson.name === 'Desh' || userJson.name === 'Rey')) userJson.name = 'Ray';
+    if (userJson.role === 'partner1' && (userJson.name === 'Ray' || userJson.name === 'Rey')) userJson.name = 'Desh';
 
     return {
       user: userJson,

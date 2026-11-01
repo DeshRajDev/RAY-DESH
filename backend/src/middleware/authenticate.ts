@@ -41,10 +41,17 @@ export async function authenticate(
       return;
     }
 
+    let userName = user.name;
+    if (user.role === 'partner2' && (userName === 'Desh' || userName === 'Rey' || !userName)) {
+      userName = 'Ray';
+    } else if (user.role === 'partner1' && (userName === 'Ray' || userName === 'Rey' || !userName)) {
+      userName = 'Desh';
+    }
+
     req.user = {
       id: user._id.toString(),
       _id: user._id,
-      name: user.name,
+      name: userName,
       nickname: user.nickname,
       email: user.email,
       avatar: user.avatar,

@@ -26,16 +26,17 @@ export function getNowInIST(referenceDate: Date = new Date()): Date {
 }
 
 /**
- * Calculates whether Rey's birthday (November 1, 2026) is active in IST.
+ * Calculates whether Ray's birthday (November 1 to November 2, 2026) is active in IST.
  * Start: 2026-11-01 00:00:00.000 IST
- * End:   2026-11-01 23:59:59.999 IST
+ * End:   2026-11-02 23:59:59.999 IST
+ * Expires automatically after: 2026-11-02 11:59:59 PM IST (at Nov 3, 2026 00:00:00 IST)
  */
 export function calculateLocalISTBirthdayStatus(referenceDate: Date = new Date()): BirthdayISTStatus {
   const nowIST = getNowInIST(referenceDate);
 
   // Month 10 is November in JavaScript Date (0-indexed)
   const bdayStartIST = new Date(2026, 10, 1, 0, 0, 0, 0);
-  const bdayEndIST = new Date(2026, 10, 1, 23, 59, 59, 999);
+  const bdayEndIST = new Date(2026, 10, 2, 23, 59, 59, 999);
 
   const nowMs = nowIST.getTime();
   const startMs = bdayStartIST.getTime();
@@ -53,7 +54,7 @@ export function calculateLocalISTBirthdayStatus(referenceDate: Date = new Date()
     isBirthdayActive,
     isPastCelebration,
     msUntilMidnight,
-    celebrationDateIST: '2026-11-01',
+    celebrationDateIST: '2026-11-01 to 2026-11-02',
   };
 }
 

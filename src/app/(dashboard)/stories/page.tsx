@@ -32,6 +32,7 @@ import { ApiClient } from '@/services/api/client';
 import { Modal } from '@/components/ui/modal';
 import { formatDate } from '@/lib/date-utils';
 import { UserAvatar } from '@/components/ui/user-avatar';
+import { resolveAuthor, resolveAuthorName, resolveAuthorAvatar, isCurrentUser } from '@/lib/identity';
 
 const EMOJI_STICKERS = ['❤️', '✨', '💍', '🌸', '🥂', '🕊️', '💫', '🧸', '🌹', '🔥', '🥰', '🧿', '👑', '💌'];
 
@@ -326,8 +327,7 @@ export default function StoriesPage() {
 
           {/* Stories List */}
           {currentViewingList.map((story, idx) => {
-            const isAuthorMe = story.authorId === user.id;
-            const author = isAuthorMe ? user : partner;
+            const author = resolveAuthor(story.authorId, user, partner);
 
             return (
               <div
@@ -373,7 +373,7 @@ export default function StoriesPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
           {currentViewingList.map((story, idx) => {
-            const author = story.authorId === user.id ? user : partner;
+            const author = resolveAuthor(story.authorId, user, partner);
 
             return (
               <div
@@ -522,13 +522,13 @@ export default function StoriesPage() {
               <div className="relative z-30 mt-3 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <UserAvatar
-                    src={activeStory.authorId === user.id ? user.avatar : partner.avatar}
-                    name={activeStory.authorId === user.id ? user.name : partner.name}
+                    src={resolveAuthorAvatar(activeStory.authorId, user, partner)}
+                    name={resolveAuthorName(activeStory.authorId, user, partner)}
                     size="sm"
                   />
                   <div>
                     <h4 className="font-serif text-xs text-white">
-                      {activeStory.authorId === user.id ? user.name : partner.name}
+                      {resolveAuthorName(activeStory.authorId, user, partner)}
                     </h4>
                     <p className="text-[10px] font-mono text-[#AAAAAA]">
                       {formatDate(activeStory.createdAt, 'relative')} • {activeStory.durationSeconds || 15}s
