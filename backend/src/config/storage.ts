@@ -80,7 +80,11 @@ export interface UploadResult {
 }
 
 export async function processUploadedFile(file: Express.Multer.File): Promise<UploadResult> {
-  const isVideo = file.mimetype.startsWith('video');
+  if (!file) {
+    throw new Error('No file provided for processing');
+  }
+  const mimeType = file.mimetype || 'application/octet-stream';
+  const isVideo = mimeType.startsWith('video') || /\.(mp4|mov|webm|mkv|3gp)$/i.test(file.originalname || '');
 
   if (hasCloudinary) {
     try {
@@ -108,7 +112,7 @@ export async function processUploadedFile(file: Express.Multer.File): Promise<Up
         url: result.secure_url,
         thumbnailUrl: thumbnailUrl || result.secure_url,
         storageKey: result.public_id,
-        mimeType: file.mimetype,
+        mimeType,
         sizeBytes: file.size,
         width: result.width,
         height: result.height,
@@ -126,7 +130,7 @@ export async function processUploadedFile(file: Express.Multer.File): Promise<Up
     url: publicUrl,
     thumbnailUrl: isVideo ? undefined : publicUrl,
     storageKey: file.filename,
-    mimeType: file.mimetype,
+    mimeType,
     sizeBytes: file.size,
     storageProvider: 'local',
   };

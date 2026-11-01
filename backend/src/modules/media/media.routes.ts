@@ -84,7 +84,8 @@ router.post('/upload', authenticate, requireCouple, upload.any(), async (req: Au
     }
 
     const { title, caption, description, categories, tags, isFavorite, takenAt } = req.body;
-    const processed = await processUploadedFile(req.file);
+    req.file = file;
+    const processed = await processUploadedFile(file);
 
     let mediaType: 'image' | 'video' | 'audio' | 'document' = 'image';
     if (processed.mimeType.startsWith('video')) mediaType = 'video';
