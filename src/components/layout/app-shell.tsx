@@ -22,7 +22,7 @@ import { AnimatePresence } from 'framer-motion';
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isAuthenticated, floatingHearts, partner } = useApp();
+  const { isAuthenticated, floatingHearts, user, partner } = useApp();
 
   const [showEntrance, setShowEntrance] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {

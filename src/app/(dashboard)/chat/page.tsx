@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Send, 
@@ -202,6 +202,13 @@ export default function ChatPage() {
     return sId === myId;
   }, [user, couple]);
 
+  const pinnedMessages = useMemo(() => messages.filter(m => m.isPinned), [messages]);
+  const filteredMessages = useMemo(() => {
+    return searchQuery.trim()
+      ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
+      : messages;
+  }, [messages, searchQuery]);
+
   const firstUnreadMsgId = useMemo(() => {
     if (unreadChatCount <= 0) return null;
     const first = filteredMessages.find(m => !m.isRead && !checkIsMe(m));
@@ -402,10 +409,7 @@ export default function ChatPage() {
     return <span className="text-[#666666]">offline</span>;
   }, [isPartnerTyping, partnerPresence]);
 
-  const pinnedMessages = messages.filter(m => m.isPinned);
-  const filteredMessages = searchQuery.trim()
-    ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
-    : messages;
+
 
   return (
     <div className="flex flex-1 min-h-0 w-full overflow-hidden bg-[#070707] relative">
