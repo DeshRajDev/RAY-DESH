@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Heart,
@@ -306,6 +306,20 @@ export function BirthdayCelebrationHome() {
 
   // Gallery Assets from Media Library
   const [galleryAssets, setGalleryAssets] = useState<MediaAsset[]>([]);
+
+  // Effective scrapbook photos (custom or automatically sourced from media library)
+  const effectiveScrapbookPhotos = useMemo<ScrapbookItem[]>(() => {
+    if (customScrapbookPhotos.length > 0) return customScrapbookPhotos;
+    return galleryAssets.map((asset, i) => ({
+      id: `sb_auto_${asset.id || i}`,
+      url: asset.url,
+      title: asset.title || `Ray — Keepsake Photo ${i + 1}`,
+      note: asset.caption || asset.description || 'A treasured captured photograph of Ray saved in our media library.',
+      tag: 'Gallery Photo',
+      date: new Date(asset.createdAt || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      rotation: i % 2 === 0 ? 'rotate-[1.5deg]' : 'rotate-[-1.5deg]',
+    }));
+  }, [customScrapbookPhotos, galleryAssets]);
 
   // Persistent photo overrides for Message Cards and Surprise Boxes
   const [cardPhotoOverrides, setCardPhotoOverrides] = useState<Record<string, string>>(() => {
@@ -911,24 +925,11 @@ export function BirthdayCelebrationHome() {
           </div>
 
           {/* Effective scrapbook photos (custom or automatically sourced from media library) */}
-          {(() => {
-            const effectiveScrapbookPhotos: ScrapbookItem[] = customScrapbookPhotos.length > 0
-              ? customScrapbookPhotos
-              : galleryAssets.map((asset, i) => ({
-                  id: `sb_auto_${asset.id || i}`,
-                  url: asset.url,
-                  title: asset.title || `Ray — Keepsake Photo ${i + 1}`,
-                  note: asset.caption || asset.description || 'A treasured captured photograph of Ray saved in our media library.',
-                  tag: 'Gallery Photo',
-                  date: new Date(asset.createdAt || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                  rotation: i % 2 === 0 ? 'rotate-[1.5deg]' : 'rotate-[-1.5deg]',
-                }));
-
-            return effectiveScrapbookPhotos.map((photo) => (
-              <div
-                key={photo.id}
-                className="relative rounded-2xl bg-[#141414] border border-white/15 p-5 shadow-2xl space-y-4 group transition-all hover:border-white/30"
-              >
+          {effectiveScrapbookPhotos.map((photo) => (
+            <div
+              key={photo.id}
+              className="relative rounded-2xl bg-[#141414] border border-white/15 p-5 shadow-2xl space-y-4 group transition-all hover:border-white/30"
+            >
               {/* Tape Sticker */}
               <div className={`absolute -top-3 left-8 px-3.5 py-0.5 rounded-sm bg-white/15 border border-white/20 text-[9px] font-mono uppercase tracking-wider text-white ${photo.rotation || 'rotate-[1deg]'} shadow-sm backdrop-blur-xs`}>
                 {photo.tag}
