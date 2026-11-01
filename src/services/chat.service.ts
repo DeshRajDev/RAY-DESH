@@ -961,23 +961,6 @@ class ChatService {
     };
   }
 
-  public disconnectSocket() {
-    if (this.socket) {
-      try {
-        this.socket.disconnect();
-      } catch {
-        // ignore
-      }
-      this.socket = null;
-    }
-    this.isConnected = false;
-    this.connectionListeners.forEach((l) => l(false));
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-  }
-
   private notifyListeners() {
     const copy = [...this.messages];
     this.listeners.forEach((l) => l(copy));

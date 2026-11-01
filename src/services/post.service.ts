@@ -78,8 +78,9 @@ class PostService {
             })) : [],
             isPinned: !!item.isPinned,
             createdAt: item.createdAt || new Date().toISOString(),
-          }));
-          this.posts = formatted;
+          };
+        });
+        this.posts = formatted;
           this.savePosts();
         }
       }
