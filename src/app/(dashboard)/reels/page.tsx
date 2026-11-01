@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Film,
@@ -15,13 +15,21 @@ import {
   Sparkles,
   Layers,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Volume2,
+  VolumeX,
+  ChevronUp,
+  ChevronDown,
+  LayoutGrid,
+  Smartphone,
+  Images,
 } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
-import { Reel, ReelCategory } from '@/types';
+import { Reel, ReelCategory, MediaAsset } from '@/types';
 import { reelsService } from '@/services/reels.service';
 import { ExternalVideoEmbed } from '@/components/reels/ExternalVideoEmbed';
 import { Modal, EmptyState } from '@/components/ui/modal';
+import { MediaPickerModal } from '@/components/media/MediaPickerModal';
 import { formatDate } from '@/lib/date-utils';
 
 function InstagramIcon({ className }: { className?: string }) {
@@ -49,11 +57,37 @@ export default function ReelsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
+  // Feed View & Autoplay states
+  const [viewMode, setViewMode] = useState<'feed' | 'grid'>('feed');
+  const [activeReelIndex, setActiveReelIndex] = useState<number>(0);
+  const [isMuted, setIsMuted] = useState<boolean>(true);
+  const feedContainerRef = useRef<HTMLDivElement>(null);
+
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [activeReel, setActiveReel] = useState<Reel | null>(null);
+
+  const handleSelectFromLibrary = async (selectedAssets: MediaAsset[]) => {
+    for (const asset of selectedAssets) {
+      try {
+        await reelsService.addReel({
+          url: asset.url,
+          title: asset.title || 'Sanctuary Reel',
+          caption: asset.caption || '',
+          category: 'romantic',
+          isFavorite: asset.isFavorite,
+        });
+      } catch (err) {
+        console.warn('Reel already in list or error:', err);
+      }
+    }
+    const res = await reelsService.getReels(selectedCategory);
+    if (res && res.data) setReels(res.data);
+    triggerHeartEffect();
+  };
 
   // Add Form State
   const [newUrl, setNewUrl] = useState('');
@@ -108,10 +142,47 @@ export default function ReelsPage() {
     );
   }, [reels, searchQuery]);
 
-  // Statistics
   const totalCount = reels.length;
-  const romanticCount = reels.filter((r) => r.category.toLowerCase() === 'romantic').length;
   const favoritesCount = reels.filter((r) => r.isFavorite).length;
+
+  // IntersectionObserver to auto-play only visible reel and pause others
+  useEffect(() => {
+    if (viewMode !== 'feed' || displayedReels.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const indexStr = entry.target.getAttribute('data-index');
+            if (indexStr !== null) {
+              const idx = parseInt(indexStr, 10);
+              if (!isNaN(idx)) {
+                setActiveReelIndex(idx);
+              }
+            }
+          }
+        });
+      },
+      {
+        root: feedContainerRef.current,
+        threshold: 0.6,
+      }
+    );
+
+    const cards = feedContainerRef.current?.querySelectorAll('.reel-feed-card');
+    cards?.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [viewMode, displayedReels]);
+
+  const scrollToReel = (targetIdx: number) => {
+    if (targetIdx < 0 || targetIdx >= displayedReels.length) return;
+    const el = feedContainerRef.current?.querySelector(`[data-index="${targetIdx}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setActiveReelIndex(targetIdx);
+    }
+  };
 
   // Add Reel Handler
   const handleAddReel = async (e: React.FormEvent) => {
@@ -244,11 +315,46 @@ export default function ReelsPage() {
 
         {/* Action Button & Statistics */}
         <div className="flex flex-wrap items-center gap-3">
+          {/* Mode Switcher */}
+          <div className="flex items-center gap-1 p-1 rounded-2xl bg-[#121212] border border-white/10">
+            <button
+              onClick={() => setViewMode('feed')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                viewMode === 'feed'
+                  ? 'bg-white text-black shadow-md'
+                  : 'text-[#888888] hover:text-white'
+              }`}
+            >
+              <Smartphone className="h-3.5 w-3.5" />
+              <span>Feed</span>
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                viewMode === 'grid'
+                  ? 'bg-white text-black shadow-md'
+                  : 'text-[#888888] hover:text-white'
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              <span>Grid</span>
+            </button>
+          </div>
+
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#121212] border border-white/10 text-xs text-[#888888] font-mono">
             <span>{totalCount} Saved</span>
             <span className="text-white/20">•</span>
             <span className="text-white">{favoritesCount} Favorites</span>
           </div>
+
+          <button
+            onClick={() => setIsMediaPickerOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-[#161616] border border-white/10 text-xs text-[#CCCCCC] hover:text-white hover:border-white/30 transition-all"
+            title="Pick video from Our Media Library"
+          >
+            <Images className="h-4 w-4" />
+            <span className="hidden sm:inline">From Library</span>
+          </button>
 
           <button
             onClick={() => setIsAddModalOpen(true)}
@@ -317,7 +423,124 @@ export default function ReelsPage() {
           actionText="Save a Reel"
           onAction={() => setIsAddModalOpen(true)}
         />
+      ) : viewMode === 'feed' ? (
+        /* IMMERSIVE VERTICAL REEL FEED WITH AUTOPLAY */
+        <div className="relative max-w-sm sm:max-w-md mx-auto">
+          {/* Header indicator & sound toggle */}
+          <div className="flex items-center justify-between pb-3 px-1 text-xs text-[#888888]">
+            <span className="font-mono">
+              Reel {activeReelIndex + 1} of {displayedReels.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsMuted(prev => !prev)}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-all text-xs"
+              >
+                {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+                <span>{isMuted ? 'Muted' : 'Sound On'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Vertical Snap Scroll Feed */}
+          <div
+            ref={feedContainerRef}
+            className="h-[calc(100vh-14rem)] overflow-y-auto snap-y snap-mandatory rounded-3xl space-y-6 scrollbar-none pr-1"
+          >
+            {displayedReels.map((reel, idx) => {
+              const isCurrent = idx === activeReelIndex;
+              const isNext = idx === activeReelIndex + 1;
+              const isInstagram = reel.platform === 'instagram';
+
+              return (
+                <div
+                  key={reel.id}
+                  data-index={idx}
+                  className="reel-feed-card snap-center shrink-0 w-full min-h-[580px] rounded-3xl bg-[#101010] border border-white/15 overflow-hidden p-3.5 shadow-2xl flex flex-col justify-between"
+                >
+                  {/* Embedded Player with Autoplay on Active View */}
+                  <div className="w-full">
+                    <ExternalVideoEmbed
+                      url={reel.url}
+                      platform={reel.platform}
+                      shortcode={reel.shortcode}
+                      title={reel.title}
+                      isActive={isCurrent}
+                      autoLoad={isCurrent || isNext}
+                      isMuted={isMuted}
+                      onToggleMute={() => setIsMuted(prev => !prev)}
+                    />
+                  </div>
+
+                  {/* Metadata & Actions Overlay */}
+                  <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between">
+                    <div className="flex-1 min-w-0 pr-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider text-[#AAAAAA] bg-white/5 border border-white/10">
+                          {isInstagram ? 'Instagram' : 'Facebook'}
+                        </span>
+                        <span className="text-[10px] font-mono text-[#777777] capitalize">
+                          {reel.category}
+                        </span>
+                      </div>
+                      <h3 className="font-serif text-sm text-white font-medium line-clamp-1">
+                        {reel.title || 'Untitled Reel'}
+                      </h3>
+                      {reel.caption && (
+                        <p className="text-xs text-[#888888] line-clamp-1 font-light">
+                          {reel.caption}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={(e) => handleToggleFavorite(e, reel.id)}
+                        className={`flex h-9 w-9 items-center justify-center rounded-full border transition-all ${
+                          reel.isFavorite
+                            ? 'bg-white text-black border-white shadow-md'
+                            : 'bg-[#181818] border-white/10 text-[#777777] hover:text-white'
+                        }`}
+                      >
+                        <Heart className={`h-4 w-4 ${reel.isFavorite ? 'fill-black text-black' : ''}`} />
+                      </button>
+                      <a
+                        href={reel.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-[#181818] border border-white/10 text-[#AAAAAA] hover:text-white transition-all"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop/Tablet Floating Up/Down Navigation Buttons */}
+          <div className="hidden md:flex flex-col gap-2 absolute -right-14 top-1/2 -translate-y-1/2">
+            <button
+              onClick={() => scrollToReel(activeReelIndex - 1)}
+              disabled={activeReelIndex === 0}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#161616] border border-white/15 text-white disabled:opacity-30 hover:bg-white hover:text-black transition-all shadow-md"
+              title="Previous reel"
+            >
+              <ChevronUp className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => scrollToReel(activeReelIndex + 1)}
+              disabled={activeReelIndex >= displayedReels.length - 1}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#161616] border border-white/15 text-white disabled:opacity-30 hover:bg-white hover:text-black transition-all shadow-md"
+              title="Next reel"
+            >
+              <ChevronDown className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
       ) : (
+        /* GRID VIEW */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {displayedReels.map((reel) => {
             const isInstagram = reel.platform === 'instagram';
@@ -680,6 +903,18 @@ export default function ReelsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Media Library Picker Modal */}
+      <MediaPickerModal
+        isOpen={isMediaPickerOpen}
+        onClose={() => setIsMediaPickerOpen(false)}
+        onSelect={handleSelectFromLibrary}
+        multiple
+        allowedMediaType="video"
+        defaultCategory="reels"
+        title="Choose Video from Our Media Library"
+        description="Select any uploaded video or reel from our centralized sanctuary library"
+      />
     </div>
   );
 }

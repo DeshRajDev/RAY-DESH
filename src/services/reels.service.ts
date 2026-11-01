@@ -117,7 +117,7 @@ class ReelsService {
 
     const newReel: Reel = {
       id: `reel_${Date.now()}`,
-      platform: isFacebook ? 'facebook' : 'instagram',
+      platform: isFacebook ? 'facebook' : isInstagram ? 'instagram' : 'upload',
       url: cleanUrl,
       shortcode,
       title: payload.title || '',

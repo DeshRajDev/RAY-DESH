@@ -26,7 +26,8 @@ import {
   Moon, 
   Heart,
   LogOut,
-  Film 
+  Film,
+  Images,
 } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
 import { MAIN_NAV_ITEMS } from '@/constants/nav';
@@ -37,6 +38,7 @@ const iconMap: Record<string, any> = {
   Flame,
   Sparkles,
   Camera,
+  Images,
   Film,
   Bookmark,
   Music,

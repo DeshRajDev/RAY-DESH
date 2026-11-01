@@ -28,8 +28,17 @@ router.get('/messages', authenticate, requireCouple, async (req: AuthenticatedRe
       .sort({ createdAt: -1 })
       .limit(limit);
 
-    // Return in ascending chronological order for chat view
-    return sendSuccess(res, messages.reverse().map((m: any) => m.toJSON()));
+    // Return in ascending chronological order for chat view with guaranteed senderRole
+    const partner1Str = (req.couple?.partner1Id || '').toString();
+    const formatted = messages.reverse().map((m: any) => {
+      const json = m.toJSON();
+      if (!json.senderRole) {
+        json.senderRole = (json.senderId === partner1Str || json.senderId === 'user_1') ? 'partner1' : 'partner2';
+      }
+      return json;
+    });
+
+    return sendSuccess(res, formatted);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to fetch messages';
     return sendError(res, msg, 500);
@@ -65,6 +74,7 @@ router.post('/messages', authenticate, requireCouple, async (req: AuthenticatedR
       coupleId: couple._id,
       senderId: new mongoose.Types.ObjectId(userId),
       receiverId: receiverId,
+      senderRole: req.user!.role,
       content: content || '',
       type,
       attachments,

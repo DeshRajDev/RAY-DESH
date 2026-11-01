@@ -27,6 +27,8 @@ import { birthdayService } from '@/services/birthday.service';
 import { Modal } from '@/components/ui/modal';
 import { timeUntil, formatDate, isBirthdayToday } from '@/lib/date-utils';
 import { ExternalVideoEmbed } from '@/components/reels/ExternalVideoEmbed';
+import { BirthdayCelebrationHome } from '@/components/birthday/BirthdayCelebrationHome';
+import { calculateLocalISTBirthdayStatus } from '@/lib/birthday-ist';
 
 export default function BirthdayPage() {
   const { user, partner, triggerBirthdayCelebration, triggerHeartEffect } = useApp();
@@ -34,7 +36,7 @@ export default function BirthdayPage() {
   
   // Choose which person's birthday is being viewed (Default to Rey user_2 as upcoming)
   const [selectedCelebrantId, setSelectedCelebrantId] = useState<'user_1' | 'user_2'>('user_2');
-  const [activeTab, setActiveTab] = useState<'surprises' | 'wishlist' | 'message'>('surprises');
+  const [activeTab, setActiveTab] = useState<'celebration' | 'surprises' | 'wishlist' | 'message'>('celebration');
   
   // Modals
   const [isAddPlanModalOpen, setIsAddPlanModalOpen] = useState(false);
@@ -261,6 +263,18 @@ export default function BirthdayPage() {
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
         <div className="flex items-center gap-2 overflow-x-auto">
           <button
+            onClick={() => setActiveTab('celebration')}
+            className={`px-4 py-2 rounded-2xl text-xs font-medium flex items-center gap-1.5 transition-all ${
+              activeTab === 'celebration'
+                ? 'bg-white text-black shadow-md'
+                : 'bg-[#121212] text-[#888888] hover:text-white border border-white/5'
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>Birthday Experience ✨</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('surprises')}
             className={`px-4 py-2 rounded-2xl text-xs font-medium transition-all ${
               activeTab === 'surprises'
@@ -320,7 +334,10 @@ export default function BirthdayPage() {
 
       {/* 4. Tab Content */}
       <div className="pt-2">
-        {/* TAB 1: SECRET SURPRISES */}
+        {/* TAB 0: BIRTHDAY CELEBRATION EXPERIENCE */}
+        {activeTab === 'celebration' && (
+          <BirthdayCelebrationHome />
+        )}
         {activeTab === 'surprises' && (
           <div>
             {!isSurpriseUnlocked ? (

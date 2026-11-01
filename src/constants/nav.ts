@@ -12,6 +12,7 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
   { title: 'Our Feed', href: '/posts', iconName: 'Flame', category: 'main' },
   { title: 'Our Stories', href: '/stories', iconName: 'Sparkles', category: 'main' },
   { title: 'Our Memories', href: '/memories', iconName: 'Camera', category: 'memories' },
+  { title: 'Media Library', href: '/media', iconName: 'Images', category: 'memories' },
   { title: 'Our Reels', href: '/reels', iconName: 'Film', category: 'memories' },
   { title: 'Favorites', href: '/favorites', iconName: 'Bookmark', category: 'memories' },
   { title: 'Our Music', href: '/music', iconName: 'Music', category: 'memories' },

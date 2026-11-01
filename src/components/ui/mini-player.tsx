@@ -89,8 +89,8 @@ export function MiniPlayer() {
               className={`relative overflow-hidden rounded-2xl bg-black border border-white/10 transition-all duration-300 ${
                 isYouTube
                   ? isVideoExpanded
-                    ? 'h-64 w-full block'
-                    : 'h-40 w-full block'
+                    ? 'h-52 w-full block'
+                    : 'h-0 w-0 opacity-0 overflow-hidden pointer-events-none'
                   : 'hidden'
               }`}
             >
@@ -98,36 +98,34 @@ export function MiniPlayer() {
             </div>
 
             <div className="flex items-center justify-between gap-2 pt-0.5">
-              {/* Song Cover & Info */}
+              {/* Song Cover & Info (Audio-first experience) */}
               <div
                 onClick={() => router.push('/music')}
                 className="flex items-center gap-2.5 min-w-0 cursor-pointer group flex-1"
               >
-                {!isYouTube && (
-                  <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-white/10 shadow-inner bg-[#1A1A1A]">
-                    <img
-                      src={currentSong.coverUrl}
-                      alt={currentSong.title}
-                      className={`h-full w-full object-cover transition-transform duration-500 ${
-                        isPlaying ? 'scale-105' : 'scale-100'
-                      }`}
-                    />
-                    {isPlaying && !playerState?.isLoading && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                        <div className="flex items-end gap-0.5 h-3">
-                          <span className="w-0.5 h-full bg-white animate-pulse" />
-                          <span className="w-0.5 h-2/3 bg-white animate-pulse delay-75" />
-                          <span className="w-0.5 h-4/5 bg-white animate-pulse delay-150" />
-                        </div>
+                <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-white/10 shadow-inner bg-[#1A1A1A]">
+                  <img
+                    src={currentSong.coverUrl || 'https://images.unsplash.com/photo-1518895949257-7621c3c786d7?w=300&auto=format&fit=crop&q=80'}
+                    alt={currentSong.title}
+                    className={`h-full w-full object-cover transition-transform duration-500 ${
+                      isPlaying ? 'scale-105' : 'scale-100'
+                    }`}
+                  />
+                  {isPlaying && !playerState?.isLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                      <div className="flex items-end gap-0.5 h-3">
+                        <span className="w-0.5 h-full bg-white animate-pulse" />
+                        <span className="w-0.5 h-2/3 bg-white animate-pulse delay-75" />
+                        <span className="w-0.5 h-4/5 bg-white animate-pulse delay-150" />
                       </div>
-                    )}
-                    {playerState?.isLoading && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                        <Loader2 className="h-4 w-4 text-white animate-spin" />
-                      </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
+                  {playerState?.isLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                      <Loader2 className="h-4 w-4 text-white animate-spin" />
+                    </div>
+                  )}
+                </div>
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">

@@ -24,7 +24,7 @@ export class ApiClient {
 
   private constructor() {
     if (typeof window !== 'undefined') {
-      this.token = localStorage.getItem('couple_auth_token');
+      this.token = localStorage.getItem('couple_auth_token') || localStorage.getItem('auth_token');
     }
   }
 
@@ -60,15 +60,17 @@ export class ApiClient {
     if (typeof window !== 'undefined') {
       if (token) {
         localStorage.setItem('couple_auth_token', token);
+        localStorage.setItem('auth_token', token);
       } else {
         localStorage.removeItem('couple_auth_token');
+        localStorage.removeItem('auth_token');
       }
     }
   }
 
   public getToken(): string | null {
     if (!this.token && typeof window !== 'undefined') {
-      this.token = localStorage.getItem('couple_auth_token');
+      this.token = localStorage.getItem('couple_auth_token') || localStorage.getItem('auth_token');
     }
     return this.token;
   }

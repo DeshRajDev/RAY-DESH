@@ -2,6 +2,8 @@ export type ID = string;
 
 export interface User {
   id: ID;
+  _id?: string;
+  mongoId?: string;
   name: string;
   nickname: string;
   email?: string;
@@ -21,8 +23,11 @@ export interface User {
 
 export interface Couple {
   id: ID;
+  _id?: string;
   partner1: User;
   partner2: User;
+  partner1Id?: string;
+  partner2Id?: string;
   anniversaryDate: string; // ISO string
   relationshipStartDate: string; // ISO string
   theme: 'dark' | 'light' | 'system';
@@ -51,6 +56,7 @@ export interface Message {
   id: ID;
   senderId: ID;
   receiverId: ID;
+  senderRole?: 'partner1' | 'partner2';
   content: string;
   type: 'text' | 'image' | 'video' | 'voice' | 'sticker';
   attachments?: MessageAttachment[];
@@ -122,7 +128,7 @@ export interface Memory {
   createdAt: string;
 }
 
-export type ReelPlatform = 'instagram' | 'facebook';
+export type ReelPlatform = 'instagram' | 'facebook' | 'upload';
 
 export type ReelCategory = 'All' | 'romantic' | 'memories' | 'favorites' | 'recently_added' | string;
 
@@ -132,7 +138,10 @@ export interface Reel {
   createdBy?: ID;
   createdByName?: string;
   platform: ReelPlatform;
-  url: string; // original source URL including query params
+  url: string; // original source URL or uploaded media URL
+  thumbnailUrl?: string;
+  mediaAssetId?: string;
+  videoUrl?: string;
   shortcode?: string;
   title?: string;
   caption?: string;
@@ -140,6 +149,51 @@ export interface Reel {
   isFavorite?: boolean;
   savedAt: string; // ISO string
   createdAt?: string;
+  updatedAt?: string;
+}
+
+export type MediaSectionCategory =
+  | 'All'
+  | 'reels'
+  | 'memories'
+  | 'feed'
+  | 'stories'
+  | 'gallery'
+  | 'trips'
+  | 'birthday'
+  | 'romantic'
+  | 'spiritual'
+  | 'dreams'
+  | 'favorites'
+  | 'uncategorized'
+  | string;
+
+export interface MediaAsset {
+  id: ID;
+  coupleId?: ID;
+  ownerId?: ID;
+  ownerRole?: 'partner1' | 'partner2';
+  url: string;
+  thumbnailUrl?: string;
+  mediaType: 'image' | 'video' | 'audio' | 'document';
+  mimeType: string;
+  sizeBytes: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  title?: string;
+  caption?: string;
+  description?: string;
+  tags: string[];
+  categories: string[];
+  originalFilename?: string;
+  storageProvider?: 'cloudinary' | 'local' | 's3';
+  storageKey?: string;
+  isFavorite: boolean;
+  isPublished: boolean;
+  displayOrder?: number;
+  takenAt?: string;
+  createdAt: string;
   updatedAt?: string;
 }
 

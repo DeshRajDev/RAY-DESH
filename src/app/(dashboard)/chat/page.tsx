@@ -206,8 +206,9 @@ export default function ChatPage() {
     setShowEmojiPicker(false);
 
     await chatService.sendMessage({
-      senderId: user.id,
-      receiverId: partner.id,
+      senderId: (user as any)._id || (user as any).mongoId || user.id,
+      receiverId: (partner as any)._id || (partner as any).mongoId || partner.id,
+      senderRole: user.role,
       content: textToSend,
       type,
       attachments,
@@ -484,12 +485,34 @@ export default function ChatPage() {
               </div>
             ) : (
               filteredMessages.map((msg) => {
-                const isMe = 
-                  msg.senderId === user.id ||
-                  msg.senderId === (user as any)._id ||
-                  (user.role === 'partner1' && (msg.senderId === 'user_1' || msg.senderId === (couple as any)?.partner1Id || msg.senderId === (couple as any)?.partner1?.id)) ||
-                  (user.role === 'partner2' && (msg.senderId === 'user_2' || msg.senderId === (couple as any)?.partner2Id || msg.senderId === (couple as any)?.partner2?.id)) ||
-                  Boolean((msg as any).senderRole && (msg as any).senderRole === user.role);
+                const isMe = (() => {
+                  // 1. Direct role match (100% reliable across all sessions & IDs)
+                  if ((msg as any).senderRole) {
+                    return (msg as any).senderRole === user.role;
+                  }
+                  const sId = String(msg.senderId || '').trim();
+                  const myId = String(user.id || '').trim();
+                  const myMongoId = String((user as any).mongoId || (user as any)._id || '').trim();
+
+                  // 2. Exact match with user id or mongoId
+                  if (sId && (sId === myId || (myMongoId && sId === myMongoId))) {
+                    return true;
+                  }
+
+                  // 3. Partner 1 vs Partner 2 role-based mapping
+                  const p1Id = String((couple as any)?.partner1Id || couple?.partner1?.id || (couple as any)?.partner1 || '').trim();
+                  const p2Id = String((couple as any)?.partner2Id || couple?.partner2?.id || (couple as any)?.partner2 || '').trim();
+
+                  if (user.role === 'partner1') {
+                    if (sId === 'user_1' || (p1Id && sId === p1Id)) return true;
+                    if (sId === 'user_2' || (p2Id && sId === p2Id)) return false;
+                  } else if (user.role === 'partner2') {
+                    if (sId === 'user_2' || (p2Id && sId === p2Id)) return true;
+                    if (sId === 'user_1' || (p1Id && sId === p1Id)) return false;
+                  }
+
+                  return sId === myId;
+                })();
 
                 return (
                   <motion.div

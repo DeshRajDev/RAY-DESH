@@ -18,6 +18,7 @@ export interface IMessage extends Document {
   coupleId: mongoose.Types.ObjectId;
   senderId: mongoose.Types.ObjectId;
   receiverId: mongoose.Types.ObjectId;
+  senderRole?: 'partner1' | 'partner2';
   content: string;
   type: 'text' | 'image' | 'video' | 'voice' | 'sticker';
   attachments: IMessageAttachment[];
@@ -43,6 +44,7 @@ const messageSchema = new Schema<IMessage>(
     coupleId: { type: Schema.Types.ObjectId, ref: 'Couple', required: true, index: true },
     senderId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     receiverId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    senderRole: { type: String, enum: ['partner1', 'partner2'], index: true },
     content: { type: String, default: '' },
     type: { type: String, enum: ['text', 'image', 'video', 'voice', 'sticker'], default: 'text' },
     attachments: [
@@ -83,6 +85,7 @@ const messageSchema = new Schema<IMessage>(
         ret.senderId = ret.senderId?.toString();
         ret.receiverId = ret.receiverId?.toString();
         ret.coupleId = ret.coupleId?.toString();
+        ret.senderRole = ret.senderRole;
         if (ret.replyToId) ret.replyToId = ret.replyToId.toString();
         delete ret._id;
         delete ret.__v;

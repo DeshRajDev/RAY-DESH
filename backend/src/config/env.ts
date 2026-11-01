@@ -21,7 +21,7 @@ const envSchema = z.object({
   MONGODB_URI: z.string().default('mongodb://localhost:27017/couple_sanctuary'),
   FRONTEND_URL: z.string().default('http://localhost:3000'),
   JWT_SECRET: z.string().min(16).default('super_secret_couple_sanctuary_jwt_key_2026_desh_rey'),
-  JWT_EXPIRES_IN: z.string().default('7d'),
+  JWT_EXPIRES_IN: z.string().default('30d'),
   REFRESH_TOKEN_SECRET: z.string().min(16).default('super_secret_refresh_jwt_key_2026_desh_rey'),
   REFRESH_TOKEN_EXPIRES_IN: z.string().default('30d'),
   COOKIE_SECRET: z.string().default('couple_sanctuary_cookie_secret_key_2026'),

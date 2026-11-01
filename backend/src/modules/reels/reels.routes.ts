@@ -4,6 +4,7 @@ import { authenticate } from '../../middleware/authenticate';
 import { requireCouple } from '../../middleware/authorize';
 import { AuthenticatedRequest } from '../../types';
 import { Reel } from '../../models/Reel';
+import { MediaAsset } from '../../models/MediaAsset';
 import { sendSuccess, sendError } from '../../utils/response';
 import { parseAndValidateReelUrl } from './reels.validation';
 
@@ -25,7 +26,41 @@ router.get('/', authenticate, requireCouple, async (req: AuthenticatedRequest, r
 
     const sortOrder: Record<string, 1 | -1> = category === 'recently_added' ? { savedAt: -1 } : { isFavorite: -1, savedAt: -1 };
 
-    const reels = await Reel.find(filter).sort(sortOrder);
+    let reels = await Reel.find(filter).sort(sortOrder);
+
+    // Also auto-incorporate any MediaAssets tagged 'reels' that are not yet mapped
+    try {
+      const existingMediaIds = reels.map((r: any) => r.mediaAssetId).filter(Boolean);
+      const unlinkedAssets = await MediaAsset.find({
+        coupleId: new mongoose.Types.ObjectId(req.couple!.id),
+        categories: 'reels',
+        mediaType: 'video',
+        _id: { $nin: existingMediaIds },
+      });
+
+      if (unlinkedAssets.length > 0) {
+        for (const asset of unlinkedAssets) {
+          const created = await Reel.create({
+            coupleId: req.couple!.id,
+            createdBy: asset.ownerId,
+            createdByName: 'Desh',
+            platform: 'upload',
+            sourceUrl: asset.url,
+            thumbnailUrl: asset.thumbnailUrl || asset.url,
+            mediaAssetId: asset._id,
+            title: asset.title || 'Romantic Reel',
+            caption: asset.caption || '',
+            category: 'romantic',
+            isFavorite: Boolean(asset.isFavorite),
+            savedAt: asset.createdAt || new Date(),
+          });
+          reels.push(created);
+        }
+      }
+    } catch (syncErr) {
+      console.warn('Error syncing unlinked reels:', syncErr);
+    }
+
     return sendSuccess(res, reels.map((r: any) => r.toJSON()));
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to fetch reels';

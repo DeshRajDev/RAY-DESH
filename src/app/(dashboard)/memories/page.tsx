@@ -3,11 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Camera, Heart, MapPin, Calendar, Tag, Filter, Search, Grid, Eye } from 'lucide-react';
+import { Plus, Camera, Heart, MapPin, Calendar, Tag, Filter, Search, Grid, Eye, Images } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
-import { Memory, MemoryCategory } from '@/types';
+import { Memory, MemoryCategory, MediaAsset } from '@/types';
 import { memoryService } from '@/services/memory.service';
 import { Modal, EmptyState } from '@/components/ui/modal';
+import { MediaPickerModal } from '@/components/media/MediaPickerModal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDate } from '@/lib/date-utils';
 
@@ -29,6 +30,7 @@ export default function MemoriesPage() {
   const [selectedCategory, setSelectedCategory] = useState<MemoryCategory>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
 
   // New Memory form state
   const [newTitle, setNewTitle] = useState('');
@@ -38,6 +40,15 @@ export default function MemoriesPage() {
   const [newDate, setNewDate] = useState(new Date().toISOString().slice(0, 10));
   const [newCoverUrl, setNewCoverUrl] = useState('');
   const [newTags, setNewTags] = useState('');
+
+  const handleSelectFromLibrary = (selectedAssets: MediaAsset[]) => {
+    if (selectedAssets.length > 0) {
+      const first = selectedAssets[0];
+      setNewCoverUrl(first.url);
+      if (!newTitle) setNewTitle(first.title || '');
+      if (!newDescription && first.caption) setNewDescription(first.caption);
+    }
+  };
 
   useEffect(() => {
     setIsLoading(true);
@@ -314,12 +325,22 @@ export default function MemoriesPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs text-[#AAAAAA]">Cover Photo URL</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-[#AAAAAA]">Cover Photo / Video</label>
+              <button
+                type="button"
+                onClick={() => setIsMediaPickerOpen(true)}
+                className="text-[11px] font-mono text-white/80 hover:text-white flex items-center gap-1.5 transition-colors"
+              >
+                <Images className="h-3.5 w-3.5" />
+                <span>Choose from Library</span>
+              </button>
+            </div>
             <input
               type="text"
               value={newCoverUrl}
               onChange={e => setNewCoverUrl(e.target.value)}
-              placeholder="https://images.unsplash.com/photo-..."
+              placeholder="Select from Media Library or paste photo URL..."
               className="clay-input w-full h-10 px-3 text-xs"
             />
           </div>
@@ -363,6 +384,16 @@ export default function MemoriesPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Media Library Picker Modal */}
+      <MediaPickerModal
+        isOpen={isMediaPickerOpen}
+        onClose={() => setIsMediaPickerOpen(false)}
+        onSelect={handleSelectFromLibrary}
+        defaultCategory="memories"
+        title="Choose from Our Media Library"
+        description="Select a photo or video from our centralized sanctuary library"
+      />
     </div>
   );
 }

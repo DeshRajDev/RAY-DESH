@@ -50,7 +50,7 @@ class AuthService {
     if (typeof window !== 'undefined') {
       try {
         const sessionActive = localStorage.getItem(SESSION_KEY);
-        const token = localStorage.getItem('auth_token');
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('couple_auth_token');
         if (sessionActive === 'true' || !!token) {
           this.isSessionActive = true;
         }
@@ -74,7 +74,7 @@ class AuthService {
 
   public isAuthenticated(): boolean {
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('auth_token');
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('couple_auth_token');
       if (token) return true;
     }
     return this.isSessionActive;
@@ -152,6 +152,8 @@ class AuthService {
       // Update in-memory user
       const userObj: User = {
         id: mappedRole,
+        _id: backendUser.id || backendUser._id,
+        mongoId: backendUser.id || backendUser._id,
         name: backendUser.name,
         nickname: backendUser.nickname || '',
         email: backendUser.email,
@@ -175,8 +177,13 @@ class AuthService {
         localStorage.setItem(STORAGE_KEY, mappedRole);
         localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(this.users));
         if (backendCouple) {
+          const partner1Id = (backendCouple.partner1?.id || backendCouple.partner1 || (backendCouple.partner1 as any)?._id || '').toString();
+          const partner2Id = (backendCouple.partner2?.id || backendCouple.partner2 || (backendCouple.partner2 as any)?._id || '').toString();
           localStorage.setItem('sanctuary_couple_settings_v2', JSON.stringify({
             id: backendCouple.id || backendCouple._id,
+            _id: backendCouple.id || backendCouple._id,
+            partner1Id,
+            partner2Id,
             partner1: mappedRole === 'user_1' ? userObj : this.getPartnerUser(),
             partner2: mappedRole === 'user_2' ? userObj : this.getPartnerUser(),
             anniversaryDate: backendCouple.anniversaryDate,
@@ -221,6 +228,8 @@ class AuthService {
         this.isSessionActive = true;
         this.users[mappedRole] = {
           ...this.users[mappedRole],
+          _id: backendUser.id || backendUser._id,
+          mongoId: backendUser.id || backendUser._id,
           name: backendUser.name,
           email: backendUser.email,
           phoneNumber: backendUser.phoneNumber,

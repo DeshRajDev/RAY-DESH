@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { authenticate } from '../../middleware/authenticate';
 import { requireCouple } from '../../middleware/authorize';
 import { AuthenticatedRequest } from '../../types';
@@ -7,8 +7,15 @@ import { User } from '../../models/User';
 import { sendSuccess, sendError } from '../../utils/response';
 import { v4 as uuidv4 } from 'uuid';
 import mongoose from 'mongoose';
+import { getBirthdayISTStatus } from '../../utils/ist-time';
 
 const router = Router();
+
+// GET authoritative IST birthday status
+router.get('/status', (_req: Request, res: Response) => {
+  const status = getBirthdayISTStatus();
+  return sendSuccess(res, status);
+});
 
 // GET birthday data
 router.get('/', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
@@ -18,6 +25,9 @@ router.get('/', authenticate, requireCouple, async (req: AuthenticatedRequest, r
     const partnerId = couple.partner1Id.toString() === userId ? couple.partner2Id : couple.partner1Id;
 
     const partner = await User.findById(partnerId);
+
+    const { getBirthdayISTStatus } = require('../../utils/ist-time');
+    const istStatus = getBirthdayISTStatus();
 
     let bData = await Birthday.findOne({ coupleId: couple.id });
     if (!bData) {
@@ -30,11 +40,20 @@ router.get('/', authenticate, requireCouple, async (req: AuthenticatedRequest, r
       });
     }
 
+    // Security check: If celebrant (partner2 / Rey) requests birthday data before midnight IST,
+    // mask out secret plans to prevent pre-midnight leakage
+    let plans = bData.plans;
+    if (istStatus.isBeforeMidnight && req.user!.role === 'partner2') {
+      plans = plans.filter((p: any) => !p.secret);
+    }
+
     const payload = {
       ...bData.toJSON(),
+      plans,
       partnerBirthday: partner?.birthday || '2005-11-01T00:00:00.000Z',
       myBirthday: req.user!.birthday || '2004-05-15T00:00:00.000Z',
       partnerName: partner?.name || 'Partner',
+      istStatus,
     };
 
     return sendSuccess(res, payload);

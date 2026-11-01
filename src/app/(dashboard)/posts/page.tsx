@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Flame, Heart, MessageCircle, Music, Send, Image as ImageIcon, MapPin, Sparkles } from 'lucide-react';
+import { Plus, Flame, Heart, MessageCircle, Music, Send, Image as ImageIcon, MapPin, Sparkles, Images } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
-import { Post } from '@/types';
+import { Post, MediaAsset } from '@/types';
 import { postService } from '@/services/post.service';
 import { formatDate } from '@/lib/date-utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { MediaPickerModal } from '@/components/media/MediaPickerModal';
 
 export default function PostsFeedPage() {
   const { user, partner, openMediaViewer, triggerHeartEffect } = useApp();
@@ -15,6 +16,7 @@ export default function PostsFeedPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [newPostContent, setNewPostContent] = useState('');
   const [newPostPhoto, setNewPostPhoto] = useState('');
+  const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -100,11 +102,20 @@ export default function PostsFeedPage() {
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-white/5">
           <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setIsMediaPickerOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:border-white/30 text-xs text-[#CCCCCC] hover:text-white transition-all shrink-0"
+              title="Choose photo or video from Our Media Library"
+            >
+              <Images className="h-3.5 w-3.5" />
+              <span>From Library</span>
+            </button>
             <input
               type="text"
               value={newPostPhoto}
               onChange={e => setNewPostPhoto(e.target.value)}
-              placeholder="Paste Image URL (optional)..."
+              placeholder="Or paste media URL..."
               className="clay-input h-9 sm:h-8 w-full sm:w-48 px-3 text-xs placeholder-[#666666]"
             />
           </div>
@@ -272,6 +283,23 @@ export default function PostsFeedPage() {
           );
         }))}
       </div>
+
+      {/* Media Library Picker Modal */}
+      <MediaPickerModal
+        isOpen={isMediaPickerOpen}
+        onClose={() => setIsMediaPickerOpen(false)}
+        onSelect={(selectedAssets) => {
+          if (selectedAssets.length > 0) {
+            setNewPostPhoto(selectedAssets[0].url);
+            if (!newPostContent && selectedAssets[0].title) {
+              setNewPostContent(selectedAssets[0].title || '');
+            }
+          }
+        }}
+        defaultCategory="feed"
+        title="Choose from Our Media Library"
+        description="Select a photo or video from our centralized sanctuary library"
+      />
     </div>
   );
 }

@@ -24,7 +24,8 @@ import {
   History, 
   User, 
   Settings,
-  Film 
+  Film,
+  Images,
 } from 'lucide-react';
 import { MAIN_NAV_ITEMS } from '@/constants/nav';
 
@@ -34,6 +35,7 @@ const iconMap: Record<string, any> = {
   Flame,
   Sparkles,
   Camera,
+  Images,
   Film,
   Bookmark,
   Music,

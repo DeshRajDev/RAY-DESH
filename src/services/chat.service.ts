@@ -279,6 +279,7 @@ class ChatService {
       id: String(raw.id || raw._id),
       senderId: String(raw.senderId),
       receiverId: String(raw.receiverId),
+      senderRole: raw.senderRole,
       content: raw.content || '',
       type: raw.type || 'text',
       attachments,
@@ -539,6 +540,7 @@ class ChatService {
   public async sendMessage(payload: {
     senderId: string;
     receiverId: string;
+    senderRole?: 'partner1' | 'partner2';
     content: string;
     type?: Message['type'];
     attachments?: Message['attachments'];
@@ -553,6 +555,7 @@ class ChatService {
       id: tempId,
       senderId: payload.senderId,
       receiverId: payload.receiverId,
+      senderRole: payload.senderRole,
       content: payload.content,
       type: payload.type || 'text',
       attachments: payload.attachments,

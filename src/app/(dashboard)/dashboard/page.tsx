@@ -31,6 +31,8 @@ import { dateService } from '@/services/date.service';
 import { musicService } from '@/services/music.service';
 import { letterService } from '@/services/letter.service';
 import { Memory, Message, DateEvent, BucketListItem, Song, LoveLetter } from '@/types';
+import { BirthdayCelebrationHome } from '@/components/birthday/BirthdayCelebrationHome';
+import { calculateLocalISTBirthdayStatus } from '@/lib/birthday-ist';
 
 export default function DashboardPage() {
   const { user, partner, couple, openMediaViewer, playSong, triggerHeartEffect } = useApp();
@@ -42,6 +44,11 @@ export default function DashboardPage() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [letters, setLetters] = useState<LoveLetter[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const istStatus = calculateLocalISTBirthdayStatus();
+  const [activeDashboardMode, setActiveDashboardMode] = useState<'birthday' | 'classic'>(() => {
+    return istStatus.isBirthdayActive ? 'birthday' : 'classic';
+  });
 
   useEffect(() => {
     const update = () => {
@@ -108,6 +115,54 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-8 py-6 space-y-8">
+      {/* Dynamic Birthday Mode Switch (Activates on Nov 1, 2026 IST) */}
+      {istStatus.isBirthdayActive && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-[#1A1A1A] to-[#111111] border border-white/20 shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-black shadow-md">
+              <Cake className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-xs font-serif text-white font-medium">
+                Today is Rey&apos;s Birthday Celebration! 🎂
+              </p>
+              <p className="text-[10px] font-mono text-[#888888]">
+                Asia/Kolkata • November 1, 2026
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/60 border border-white/10">
+            <button
+              onClick={() => setActiveDashboardMode('birthday')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                activeDashboardMode === 'birthday'
+                  ? 'bg-white text-black shadow-md'
+                  : 'text-[#888888] hover:text-white'
+              }`}
+            >
+              <Sparkles className="h-3 w-3" />
+              <span>Birthday Experience</span>
+            </button>
+            <button
+              onClick={() => setActiveDashboardMode('classic')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                activeDashboardMode === 'classic'
+                  ? 'bg-white text-black shadow-md'
+                  : 'text-[#888888] hover:text-white'
+              }`}
+            >
+              <span>Classic Home</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Render Birthday Celebration Experience if Birthday mode is active */}
+      {istStatus.isBirthdayActive && activeDashboardMode === 'birthday' ? (
+        <BirthdayCelebrationHome />
+      ) : (
+        <>
       {/* 1. HERO SECTION & LIVE RELATIONSHIP TIMER */}
       <section className="relative rounded-3xl border border-white/10 bg-gradient-to-b from-[#141414] to-[#0A0A0A] p-6 sm:p-10 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.9),inset_0_1px_1px_rgba(255,255,255,0.15)] overflow-hidden">
         {/* Subtle ambient lighting */}
@@ -524,6 +579,8 @@ export default function DashboardPage() {
           </Link>
         </div>
       </section>
+        </>
+      )}
     </div>
   );
 }

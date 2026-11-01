@@ -14,12 +14,17 @@ function InstagramIcon({ className }: { className?: string }) {
   );
 }
 
+import { Volume2, VolumeX } from 'lucide-react';
+
 interface ExternalVideoEmbedProps {
   url: string;
   platform?: ReelPlatform;
   shortcode?: string;
   title?: string;
   autoLoad?: boolean;
+  isActive?: boolean;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
 }
 
 export function ExternalVideoEmbed({
@@ -28,15 +33,31 @@ export function ExternalVideoEmbed({
   shortcode: initialShortcode,
   title,
   autoLoad = false,
+  isActive = false,
+  isMuted = true,
+  onToggleMute,
 }: ExternalVideoEmbedProps) {
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(autoLoad || isActive);
   const [hasError, setHasError] = useState(false);
   const [isIframeReady, setIsIframeReady] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    if (isActive && !isLoaded) {
+      setIsLoaded(true);
+    }
+  }, [isActive, isLoaded]);
   const containerRef = useRef<HTMLDivElement>(null);
+  const isDirectVideo =
+    platform === 'upload' ||
+    url.endsWith('.mp4') ||
+    url.endsWith('.webm') ||
+    url.endsWith('.mov') ||
+    url.includes('/uploads/') ||
+    (!url.includes('instagram.com') && !url.includes('facebook.com') && !url.includes('fb.watch'));
 
   // Extract platform and shortcode if not provided
-  const detectedPlatform: ReelPlatform = platform || (url.includes('facebook.com') || url.includes('fb.watch') ? 'facebook' : 'instagram');
+  const detectedPlatform: ReelPlatform = platform || (url.includes('facebook.com') || url.includes('fb.watch') ? 'facebook' : isDirectVideo ? 'upload' : 'instagram');
   
   let shortcode = initialShortcode;
   let isPost = false;
@@ -60,7 +81,9 @@ export function ExternalVideoEmbed({
 
   // Determine official embed source URL
   let embedSrc = '';
-  if (detectedPlatform === 'instagram' && shortcode) {
+  if (isDirectVideo) {
+    embedSrc = url;
+  } else if (detectedPlatform === 'instagram' && shortcode) {
     embedSrc = isPost 
       ? `https://www.instagram.com/p/${shortcode}/embed/`
       : `https://www.instagram.com/reel/${shortcode}/embed/`;
@@ -153,23 +176,23 @@ export function ExternalVideoEmbed({
         </div>
       )}
 
-      {/* 2. Loading Skeleton while iframe is loading */}
+      {/* 2. Loading Placeholder while reel is loading */}
       {isLoaded && !isIframeReady && !hasError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0C0C0C] z-10 animate-pulse">
           <div className="h-10 w-10 rounded-full border-2 border-white/20 border-t-white animate-spin mb-3" />
-          <p className="text-xs font-mono text-[#888888]">Connecting to official player...</p>
+          <p className="text-xs font-serif text-[#CCCCCC]">Getting your next little moment ready... ✨</p>
         </div>
       )}
 
-      {/* 3. Error / Fallback State */}
+      {/* 3. Error / Unavailable State */}
       {hasError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-[#111111] z-20">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 border border-white/10 text-[#AAAAAA] mb-3">
             <AlertCircle className="h-6 w-6 text-white" />
           </div>
-          <h4 className="font-serif text-sm text-white mb-1">Playback Unavailable Here</h4>
+          <h4 className="font-serif text-sm text-white mb-1">This reel is unavailable right now.</h4>
           <p className="text-xs text-[#888888] mb-4 font-light leading-relaxed max-w-[240px]">
-            Can&apos;t play this {detectedPlatform === 'instagram' ? 'Reel' : 'video'} here? The external platform may have privacy or browser restrictions.
+            The external platform may be restricted in this view.
           </p>
 
           <div className="flex flex-col gap-2 w-full max-w-[220px]">
@@ -187,31 +210,72 @@ export function ExternalVideoEmbed({
               className="flex items-center justify-center gap-1.5 w-full py-1.5 px-3 rounded-xl bg-[#1A1A1A] border border-white/10 text-xs text-[#AAAAAA] hover:text-white transition-all"
             >
               <RefreshCw className="h-3 w-3" />
-              <span>Try Loading Again</span>
+              <span>Try again</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* 4. Official Iframe Render */}
+      {/* Sound Toggle Overlay */}
+      {onToggleMute && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleMute();
+          }}
+          className="absolute top-3 right-3 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 border border-white/20 text-white backdrop-blur-md shadow-md hover:bg-black/80 transition-all"
+          title={isMuted ? 'Unmute' : 'Mute'}
+        >
+          {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        </button>
+      )}
+
+      {/* 4. Native Uploaded Video or Official Iframe Render */}
       {isLoaded && embedSrc && !hasError && (
-        <iframe
-          key={`${embedSrc}-${retryCount}`}
-          src={embedSrc}
-          title={title || `${detectedPlatform} Reel Player`}
-          className={`w-full h-full border-0 transition-opacity duration-300 ${
-            isIframeReady ? 'opacity-100' : 'opacity-0'
-          }`}
-          allowTransparency={true}
-          scrolling="no"
-          allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-          onLoad={() => {
-            setIsIframeReady(true);
-          }}
-          onError={() => {
-            setHasError(true);
-          }}
-        />
+        isDirectVideo ? (
+          <video
+            ref={(el) => {
+              if (el) {
+                if (isActive) {
+                  el.play().catch(() => {});
+                } else {
+                  el.pause();
+                }
+              }
+            }}
+            src={embedSrc}
+            autoPlay={isActive}
+            loop
+            muted={isMuted}
+            playsInline
+            className="w-full h-full object-cover select-none cursor-pointer"
+            onLoadedData={() => setIsIframeReady(true)}
+            onError={() => setHasError(true)}
+            onClick={(e) => {
+              const video = e.currentTarget;
+              if (video.paused) video.play();
+              else video.pause();
+            }}
+          />
+        ) : (
+          <iframe
+            key={`${embedSrc}-${retryCount}`}
+            src={embedSrc}
+            title={title || `${detectedPlatform} Reel Player`}
+            className={`w-full h-full border-0 transition-opacity duration-300 ${
+              isIframeReady ? 'opacity-100' : 'opacity-0'
+            }`}
+            allowTransparency={true}
+            scrolling="no"
+            allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+            onLoad={() => {
+              setIsIframeReady(true);
+            }}
+            onError={() => {
+              setHasError(true);
+            }}
+          />
+        )
       )}
     </div>
   );

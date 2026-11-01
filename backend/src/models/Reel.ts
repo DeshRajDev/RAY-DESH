@@ -4,8 +4,10 @@ export interface IReel extends Document {
   coupleId: Types.ObjectId;
   createdBy: Types.ObjectId;
   createdByName: string;
-  platform: 'instagram' | 'facebook';
+  platform: 'instagram' | 'facebook' | 'upload';
   sourceUrl: string;
+  thumbnailUrl?: string;
+  mediaAssetId?: Types.ObjectId;
   shortcode?: string;
   title?: string;
   caption?: string;
@@ -21,8 +23,10 @@ const reelSchema = new Schema<IReel>(
     coupleId: { type: Schema.Types.ObjectId, ref: 'Couple', required: true, index: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     createdByName: { type: String, default: 'Desh' },
-    platform: { type: String, enum: ['instagram', 'facebook'], default: 'instagram', required: true },
+    platform: { type: String, enum: ['instagram', 'facebook', 'upload'], default: 'instagram', required: true },
     sourceUrl: { type: String, required: true, trim: true },
+    thumbnailUrl: { type: String, trim: true },
+    mediaAssetId: { type: Schema.Types.ObjectId, ref: 'MediaAsset' },
     shortcode: { type: String, trim: true },
     title: { type: String, default: '', trim: true },
     caption: { type: String, default: '', trim: true },
@@ -38,6 +42,7 @@ const reelSchema = new Schema<IReel>(
         ret.id = ret._id.toString();
         ret.coupleId = ret.coupleId?.toString();
         ret.createdBy = ret.createdBy?.toString();
+        if (ret.mediaAssetId) ret.mediaAssetId = ret.mediaAssetId.toString();
         ret.url = ret.sourceUrl;
         delete ret._id;
         delete ret.__v;

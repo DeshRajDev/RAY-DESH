@@ -9,12 +9,13 @@ export class AuthController {
     try {
       const result = await authService.register(req.body);
 
-      // Set cookie for browser clients
+      // Set cookie for browser clients (30-day persistent session)
       res.cookie('couple_access_token', result.accessToken, {
         httpOnly: true,
         secure: env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: '/',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
       });
 
       return sendSuccess(res, result, 'Registration successful', 201);
@@ -34,7 +35,8 @@ export class AuthController {
         httpOnly: true,
         secure: env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: '/',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
       });
 
       return sendSuccess(res, result, 'Login successful');

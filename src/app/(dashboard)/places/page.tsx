@@ -146,63 +146,86 @@ export default function PlacesPage() {
       </div>
 
       {/* Places Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-        {places.map(place => (
-          <div
-            key={place.id}
-            className="clay-card-interactive group rounded-3xl overflow-hidden border border-white/10 bg-[#0F0F0F] flex flex-col justify-between"
+      {places.length === 0 ? (
+        <div className="rounded-3xl border border-white/10 bg-[#0F0F0F] p-8 sm:p-12 text-center max-w-lg mx-auto space-y-4 shadow-xl">
+          <div className="h-14 w-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-white">
+            <Compass className="h-6 w-6 text-white" />
+          </div>
+          <h3 className="font-serif text-xl text-white">
+            {activeTab === 'Been' ? 'Our Story Begins Before Our First Footstep' : 'Our Travel Bucket List Is Waiting'}
+          </h3>
+          <p className="text-xs sm:text-sm text-[#888888] leading-relaxed">
+            {activeTab === 'Been'
+              ? 'We have not met in person yet, but every road, valley, and sunset in India is waiting for us. When we take our first trip together, our real memories will live right here.'
+              : 'Add the dream destinations across India — from Kedarnath & Vrindavan to Manali & Kashmir — that we dream of exploring hand in hand.'}
+          </p>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="clay-btn clay-btn-primary px-5 py-2 text-xs font-medium inline-flex items-center gap-2"
           >
-            {/* Image */}
-            <div className="relative h-48 w-full bg-black">
-              <img
-                src={place.photos[0]}
-                alt={place.name}
-                onClick={() => openMediaViewer(place.photos, 0, { title: place.name, description: place.notes })}
-                className="h-full w-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 cursor-pointer"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F0F] via-transparent to-black/30 pointer-events-none" />
+            <Plus className="h-4 w-4" />
+            {activeTab === 'Been' ? 'Record Our First Real Meet Memory' : 'Add a Dream Destination'}
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+          {places.map(place => (
+            <div
+              key={place.id}
+              className="clay-card-interactive group rounded-3xl overflow-hidden border border-white/10 bg-[#0F0F0F] flex flex-col justify-between"
+            >
+              {/* Image */}
+              <div className="relative h-48 w-full bg-black">
+                <img
+                  src={place.photos[0]}
+                  alt={place.name}
+                  onClick={() => openMediaViewer(place.photos, 0, { title: place.name, description: place.notes })}
+                  className="h-full w-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 cursor-pointer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F0F] via-transparent to-black/30 pointer-events-none" />
 
-              <button
-                onClick={(e) => handleToggleFavorite(e, place.id)}
-                className="absolute top-3 right-3 h-8 w-8 rounded-full bg-black/60 flex items-center justify-center text-white"
-              >
-                <Heart className={`h-4 w-4 ${place.isFavorite ? 'fill-white text-white' : 'text-[#AAAAAA]'}`} />
-              </button>
+                <button
+                  onClick={(e) => handleToggleFavorite(e, place.id)}
+                  className="absolute top-3 right-3 h-8 w-8 rounded-full bg-black/60 flex items-center justify-center text-white"
+                >
+                  <Heart className={`h-4 w-4 ${place.isFavorite ? 'fill-white text-white' : 'text-[#AAAAAA]'}`} />
+                </button>
 
-              <div className="absolute top-3 left-3">
-                <span className="rounded-full bg-black/60 backdrop-blur-md px-2.5 py-0.5 text-[10px] font-mono text-white border border-white/10">
-                  {place.city}, {place.country}
-                </span>
+                <div className="absolute top-3 left-3">
+                  <span className="rounded-full bg-black/60 backdrop-blur-md px-2.5 py-0.5 text-[10px] font-mono text-white border border-white/10">
+                    {place.city}, {place.country}
+                  </span>
+                </div>
               </div>
-            </div>
 
-            {/* Details */}
-            <div className="p-5 space-y-3">
-              <div>
-                <h3 className="font-serif text-lg text-white font-normal">{place.name}</h3>
-                {place.notes && (
-                  <p className="mt-1 text-xs text-[#777777] font-light line-clamp-2 leading-relaxed">
-                    {place.notes}
-                  </p>
-                )}
-              </div>
+              {/* Details */}
+              <div className="p-5 space-y-3">
+                <div>
+                  <h3 className="font-serif text-lg text-white font-normal">{place.name}</h3>
+                  {place.notes && (
+                    <p className="mt-1 text-xs text-[#777777] font-light line-clamp-2 leading-relaxed">
+                      {place.notes}
+                    </p>
+                  )}
+                </div>
 
-              <div className="pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-[#666666]">
-                {place.dateVisited ? (
-                  <span>Visited {formatDate(place.dateVisited, 'short')}</span>
-                ) : (
-                  <span>Wishlist item</span>
-                )}
+                <div className="pt-3 border-t border-white/5 flex items-center justify-between text-xs font-mono text-[#666666]">
+                  {place.dateVisited ? (
+                    <span>Visited {formatDate(place.dateVisited, 'short')}</span>
+                  ) : (
+                    <span>Wishlist item</span>
+                  )}
 
-                <div className="flex items-center gap-1 text-white">
-                  <Star className="h-3 w-3 fill-white" />
-                  <span>{place.rating || 5}.0</span>
+                  <div className="flex items-center gap-1 text-white">
+                    <Star className="h-3 w-3 fill-white" />
+                    <span>{place.rating || 5}.0</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* ADD PLACE MODAL */}
       <Modal

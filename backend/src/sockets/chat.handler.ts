@@ -58,6 +58,7 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
         coupleId: new mongoose.Types.ObjectId(couple.id),
         senderId: new mongoose.Types.ObjectId(user.id),
         receiverId: new mongoose.Types.ObjectId(receiverId),
+        senderRole: user.role,
         content: content || '',
         type,
         attachments,

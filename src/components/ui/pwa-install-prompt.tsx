@@ -98,10 +98,22 @@ export function PWAInstallPrompt() {
   };
 
   const handleUpdateApp = () => {
-    if (waitingWorker) {
-      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+    // Avoid refreshing if user is currently typing in an input or textarea
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable)) {
+      // Let user finish typing; notify softly
+      (activeEl as HTMLElement).blur();
     }
-    window.location.reload();
+
+    if (waitingWorker) {
+      // Listen for controllerchange so we reload once the new worker takes over
+      navigator.serviceWorker?.addEventListener('controllerchange', () => {
+        window.location.reload();
+      }, { once: true });
+      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+    } else {
+      window.location.reload();
+    }
   };
 
   if (isStandalone && !updateAvailable) {
@@ -110,27 +122,27 @@ export function PWAInstallPrompt() {
 
   return (
     <>
-      {/* Update Available Banner */}
+      {/* Update Available Banner - Part 9 Requirement */}
       <AnimatePresence>
         {updateAvailable && (
           <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-20 md:bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-96 z-50 rounded-2xl border border-white/20 bg-[#121212]/95 backdrop-blur-xl p-4 shadow-2xl flex items-center justify-between gap-3"
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.95 }}
+            className="fixed bottom-20 md:bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-96 z-50 rounded-2xl border border-white/20 bg-[#101010]/95 backdrop-blur-xl p-4 shadow-2xl flex items-center justify-between gap-3"
           >
-            <div className="flex items-center gap-2.5">
-              <Sparkles className="h-4 w-4 text-white animate-spin" />
-              <div>
-                <p className="text-xs font-medium text-white">App update available</p>
-                <p className="text-[10px] text-[#888888]">Get the latest features and fixes</p>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-serif font-medium text-white truncate">A new Ray experience is ready ❤️</p>
+                <p className="text-[10px] text-[#888888] truncate">Fresh touches and sweet surprises are waiting</p>
               </div>
             </div>
             <button
               onClick={handleUpdateApp}
-              className="clay-btn clay-btn-primary px-3 py-1.5 text-[11px] font-medium"
+              className="clay-btn clay-btn-primary px-3 py-1.5 text-[11px] font-medium shrink-0 hover:scale-105 active:scale-95 transition-all"
             >
-              Update
+              Update Now
             </button>
           </motion.div>
         )}

@@ -11,6 +11,8 @@ import { CommandPalette } from '@/components/ui/command-palette';
 import { MediaViewer } from '@/components/ui/media-viewer';
 import { BirthdayCelebration } from '@/components/ui/birthday-celebration';
 import { RayEntrance } from '@/components/ui/ray-entrance';
+import { BirthdayEntrance } from '@/components/birthday/BirthdayEntrance';
+import { calculateLocalISTBirthdayStatus, fetchAuthoritativeBirthdayStatus, watchForMidnightTransition } from '@/lib/birthday-ist';
 import { NotificationPermissionPrompt } from '@/components/ui/notification-permission-prompt';
 import { useApp } from '@/stores/app-context';
 import { Heart, Lock } from 'lucide-react';
@@ -20,7 +22,8 @@ import { AnimatePresence } from 'framer-motion';
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isAuthenticated, floatingHearts } = useApp();
+  const { isAuthenticated, floatingHearts, partner } = useApp();
+
   const [showEntrance, setShowEntrance] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return sessionStorage.getItem('ray_intro_shown') !== 'true';
@@ -28,17 +31,47 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return false;
   });
 
+  const [showBirthdayEntrance, setShowBirthdayEntrance] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const istStatus = calculateLocalISTBirthdayStatus();
+      if (istStatus.isBirthdayActive) {
+        return sessionStorage.getItem('ray_birthday_entrance_shown_2026') !== 'true';
+      }
+    }
+    return false;
+  });
+
+  // Watch for midnight IST transition in real-time
+  useEffect(() => {
+    fetchAuthoritativeBirthdayStatus().then(status => {
+      if (status.isBirthdayActive && typeof window !== 'undefined') {
+        if (sessionStorage.getItem('ray_birthday_entrance_shown_2026') !== 'true') {
+          setShowBirthdayEntrance(true);
+        }
+      }
+    });
+
+    const unwatch = watchForMidnightTransition(() => {
+      setShowBirthdayEntrance(true);
+      router.push('/birthday');
+    });
+
+    return () => unwatch();
+  }, [router]);
+
   const isChat = pathname === '/chat';
 
   useEffect(() => {
-    // Avoid instant redirect if token exists in localStorage (waiting for hydration)
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    // Avoid premature redirect if token exists in localStorage (waiting for hydration)
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('couple_auth_token') || localStorage.getItem('auth_token')) : null;
     if (!isAuthenticated && !token) {
       router.replace('/login');
     }
   }, [isAuthenticated, router]);
 
-  if (!isAuthenticated && typeof window !== 'undefined' && !localStorage.getItem('auth_token')) {
+  const hasLocalToken = typeof window !== 'undefined' && Boolean(localStorage.getItem('couple_auth_token') || localStorage.getItem('auth_token'));
+
+  if (!isAuthenticated && !hasLocalToken) {
     return (
       <div className="flex h-screen h-dvh w-full items-center justify-center bg-[#050505] text-[#E5E5E5] p-4">
         <div className="flex flex-col items-center gap-3 text-center">
@@ -55,9 +88,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      {/* 1. Standard App Entrance (Only on regular days) */}
       <AnimatePresence>
-        {showEntrance && (
+        {showEntrance && !showBirthdayEntrance && (
           <RayEntrance onComplete={() => setShowEntrance(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* 2. Birthday Entrance Surprise (Activates at midnight IST on Nov 1, 2026) */}
+      <AnimatePresence>
+        {showBirthdayEntrance && (
+          <BirthdayEntrance
+            celebrantName={partner?.name || 'Rey'}
+            onEnter={() => {
+              if (typeof window !== 'undefined') {
+                sessionStorage.setItem('ray_birthday_entrance_shown_2026', 'true');
+              }
+              setShowBirthdayEntrance(false);
+              router.push('/birthday');
+            }}
+          />
         )}
       </AnimatePresence>
 

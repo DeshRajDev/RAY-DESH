@@ -110,59 +110,78 @@ export default function TripsPage() {
       </div>
 
       {/* Trips Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {filteredTrips.map(trip => (
-          <Link
-            key={trip.id}
-            href={`/trips/${trip.id}`}
-            className="clay-card-interactive group rounded-3xl overflow-hidden border border-white/10 bg-[#0F0F0F] flex flex-col justify-between"
+      {filteredTrips.length === 0 ? (
+        <div className="rounded-3xl border border-white/10 bg-[#0F0F0F] p-8 sm:p-12 text-center max-w-lg mx-auto space-y-4 shadow-xl">
+          <div className="h-14 w-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-white">
+            <Compass className="h-6 w-6 text-white" />
+          </div>
+          <h3 className="font-serif text-xl text-white">Our Future Journeys Await Us</h3>
+          <p className="text-xs sm:text-sm text-[#888888] leading-relaxed">
+            We haven&apos;t met in person yet, but our shared travel dreams across India — from snowy peaks in Manali &amp; Kashmir to spiritual trails in Vrindavan &amp; Kedarnath — are waiting for our footprints.
+          </p>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="clay-btn clay-btn-primary px-5 py-2 text-xs font-medium inline-flex items-center gap-2"
           >
-            {/* Cover Image */}
-            <div className="relative h-60 w-full bg-black">
-              <img
-                src={trip.coverPhoto}
-                alt={trip.title}
-                className="h-full w-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-500"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F0F] via-transparent to-black/30" />
+            <Plus className="h-4 w-4" />
+            Plan Our First Trip
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {filteredTrips.map(trip => (
+            <Link
+              key={trip.id}
+              href={`/trips/${trip.id}`}
+              className="clay-card-interactive group rounded-3xl overflow-hidden border border-white/10 bg-[#0F0F0F] flex flex-col justify-between"
+            >
+              {/* Cover Image */}
+              <div className="relative h-60 w-full bg-black">
+                <img
+                  src={trip.coverPhoto}
+                  alt={trip.title}
+                  className="h-full w-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-500"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F0F] via-transparent to-black/30" />
 
-              <span className="absolute top-4 left-4 rounded-full bg-black/60 backdrop-blur-md px-3 py-0.5 text-[10px] font-mono uppercase text-white border border-white/10">
-                {trip.status}
-              </span>
-            </div>
+                <span className="absolute top-4 left-4 rounded-full bg-black/60 backdrop-blur-md px-3 py-0.5 text-[10px] font-mono uppercase text-white border border-white/10">
+                  {trip.status}
+                </span>
+              </div>
 
-            {/* Trip Details */}
-            <div className="p-6 space-y-4">
-              <div>
-                <div className="flex items-center gap-1.5 text-xs font-mono text-[#AAAAAA] mb-1">
-                  <MapPin className="h-3.5 w-3.5 text-white" />
-                  <span>{trip.destination}, {trip.country}</span>
+              {/* Trip Details */}
+              <div className="p-6 space-y-4">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-mono text-[#AAAAAA] mb-1">
+                    <MapPin className="h-3.5 w-3.5 text-white" />
+                    <span>{trip.destination}, {trip.country}</span>
+                  </div>
+                  <h3 className="font-serif text-2xl text-white font-normal group-hover:underline">
+                    {trip.title}
+                  </h3>
                 </div>
-                <h3 className="font-serif text-2xl text-white font-normal group-hover:underline">
-                  {trip.title}
-                </h3>
-              </div>
 
-              {trip.notes && (
-                <p className="text-xs text-[#777777] font-light line-clamp-2 leading-relaxed">
-                  {trip.notes}
-                </p>
-              )}
+                {trip.notes && (
+                  <p className="text-xs text-[#777777] font-light line-clamp-2 leading-relaxed">
+                    {trip.notes}
+                  </p>
+                )}
 
-              {/* Itinerary Spot count */}
-              <div className="flex items-center justify-between pt-4 border-t border-white/5 text-xs font-mono text-[#666666]">
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  {formatDate(trip.startDate, 'short')} – {formatDate(trip.endDate, 'short')}
-                </span>
-                <span className="flex items-center gap-1 text-white group-hover:translate-x-1 transition-transform">
-                  Explore Itinerary <ArrowRight className="h-3 w-3" />
-                </span>
+                {/* Itinerary Spot count */}
+                <div className="flex items-center justify-between pt-4 border-t border-white/5 text-xs font-mono text-[#666666]">
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    {formatDate(trip.startDate, 'short')} – {formatDate(trip.endDate, 'short')}
+                  </span>
+                  <span className="flex items-center gap-1 text-white group-hover:translate-x-1 transition-transform">
+                    Explore Itinerary <ArrowRight className="h-3 w-3" />
+                  </span>
+                </div>
               </div>
-            </div>
-          </Link>
-        ))}
-      </div>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* PLAN TRIP MODAL */}
       <Modal

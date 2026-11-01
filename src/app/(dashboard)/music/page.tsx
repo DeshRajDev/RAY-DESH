@@ -351,53 +351,88 @@ export default function MusicPage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
               {/* Left Column: 16:9 Video & Core Controls (8 cols on desktop) */}
               <div className="lg:col-span-8 flex flex-col space-y-4">
-                {/* 16:9 YouTube Video Frame */}
-                <div className="relative aspect-video w-full rounded-2xl sm:rounded-3xl overflow-hidden bg-black border border-white/10 shadow-2xl group">
-                  {currentSong.provider === 'youtube' ? (
-                    <div id="global-youtube-player-frame" className="w-full h-full" />
-                  ) : (
-                    <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-b from-[#181818] to-[#0A0A0A]">
-                      <img
-                        src={currentSong.coverUrl}
-                        alt={currentSong.title}
-                        className="absolute inset-0 w-full h-full object-cover opacity-20 blur-xl"
-                      />
-                      <div className="relative z-10 text-center space-y-3 p-6">
+                {/* Audio-First Showcase & Compliant YouTube Player Frame */}
+                <div className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden bg-gradient-to-b from-[#161616] via-[#101010] to-[#0A0A0A] border border-white/10 shadow-2xl p-4 sm:p-6 group">
+                  <div className="flex flex-col md:flex-row items-center gap-6">
+                    {/* Vinyl Record & Album Artwork Centerpiece */}
+                    <div className="relative shrink-0 flex items-center justify-center">
+                      {/* Spinning Vinyl Record behind artwork */}
+                      <div className={`hidden sm:block absolute -right-6 w-28 h-28 rounded-full bg-black border-2 border-[#2a2a2a] shadow-xl ${isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''}`}>
+                        <div className="absolute inset-2 rounded-full border border-white/10" />
+                        <div className="absolute inset-5 rounded-full border border-white/5" />
+                        <div className="absolute inset-9 rounded-full bg-gradient-to-tr from-amber-700 to-amber-900 border border-white/20 flex items-center justify-center">
+                          <div className="w-2.5 h-2.5 rounded-full bg-[#111]" />
+                        </div>
+                      </div>
+
+                      {/* Main Album Artwork */}
+                      <div className="relative z-10 h-32 w-32 sm:h-36 sm:w-36 rounded-2xl overflow-hidden border border-white/20 shadow-2xl bg-black">
                         <img
-                          src={currentSong.coverUrl}
+                          src={currentSong.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=80'}
                           alt={currentSong.title}
-                          className="h-32 w-32 rounded-2xl mx-auto object-cover border border-white/20 shadow-2xl"
+                          className="h-full w-full object-cover transition-transform duration-700 hover:scale-105"
                         />
-                        <h3 className="font-serif text-lg text-white font-normal">{currentSong.title}</h3>
-                        <p className="text-xs text-[#888888]">{currentSong.artist}</p>
                       </div>
                     </div>
-                  )}
 
-                  {/* Loading Spinner Overlay */}
-                  {playerState?.isLoading && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center pointer-events-none z-10">
-                      <div className="flex flex-col items-center gap-2 text-white">
-                        <Loader2 className="h-8 w-8 animate-spin text-white" />
-                        <span className="text-xs font-mono text-[#CCCCCC]">Buffering stream...</span>
+                    {/* Compliant Video Frame Container - Always mounted and visible as required by YouTube Terms */}
+                    <div className="w-full flex-1 flex flex-col justify-center">
+                      <div className="flex items-center justify-between pb-2">
+                        <span className="text-[11px] font-mono text-[#888888] uppercase tracking-wider flex items-center gap-1.5">
+                          <Music className="h-3.5 w-3.5 text-white" />
+                          <span>{currentSong.provider === 'youtube' ? 'YouTube Audio-First Player' : 'Sanctuary Audio Player'}</span>
+                        </span>
+                        {currentSong.provider === 'youtube' && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/10 text-white/80 border border-white/15">
+                            Official Embed
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="relative aspect-video w-full max-h-44 rounded-xl overflow-hidden bg-black border border-white/10">
+                        {currentSong.provider === 'youtube' ? (
+                          <div id="global-youtube-player-frame" className="w-full h-full" />
+                        ) : (
+                          <div className="relative w-full h-full flex items-center justify-center bg-gradient-to-b from-[#181818] to-[#0A0A0A]">
+                            <img
+                              src={currentSong.coverUrl}
+                              alt={currentSong.title}
+                              className="absolute inset-0 w-full h-full object-cover opacity-20 blur-xl"
+                            />
+                            <div className="relative z-10 text-center p-3">
+                              <h4 className="font-serif text-sm text-white">{currentSong.title}</h4>
+                              <p className="text-[11px] text-[#888888]">{currentSong.artist}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Subtle Loading Spinner Overlay */}
+                        {playerState?.isLoading && (
+                          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center pointer-events-none z-10">
+                            <div className="flex flex-col items-center gap-2 text-white">
+                              <Loader2 className="h-6 w-6 animate-spin text-white" />
+                              <span className="text-xs font-mono text-[#EAEAEA]">Preparing your melody... ✨</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Friendly Playback Error Overlay */}
+                        {playerState?.error && (
+                          <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center gap-2.5 p-4 text-center z-20">
+                            <AlertCircle className="h-6 w-6 text-white/80" />
+                            <p className="text-xs text-[#CCCCCC] max-w-xs">This melody is resting or unavailable right now.</p>
+                            <button
+                              onClick={() => playSong(currentSong)}
+                              className="clay-btn clay-btn-secondary px-3.5 py-1 text-xs flex items-center gap-1.5"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              <span>Try Again</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  )}
-
-                  {/* Playback Error Overlay */}
-                  {playerState?.error && (
-                    <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-3 p-6 text-center z-20">
-                      <AlertCircle className="h-8 w-8 text-red-400" />
-                      <p className="text-xs text-red-200 max-w-sm">{playerState.error}</p>
-                      <button
-                        onClick={() => playSong(currentSong)}
-                        className="clay-btn clay-btn-secondary px-4 py-1.5 text-xs flex items-center gap-1.5"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        <span>Retry Playback</span>
-                      </button>
-                    </div>
-                  )}
+                  </div>
                 </div>
 
                 {/* Progress Seeking Bar */}
