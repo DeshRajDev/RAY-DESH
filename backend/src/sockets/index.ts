@@ -8,6 +8,7 @@ import { logger } from '../utils/logger';
 import { registerChatHandlers } from './chat.handler';
 
 let ioInstance: Server | null = null;
+const userSocketsMap = new Map<string, Set<string>>();
 
 export function getSocketIo(): Server | null {
   return ioInstance;
@@ -77,20 +78,62 @@ export function initializeSockets(server: HttpServer): Server {
     const roomName = `couple:${couple.id}`;
     await socket.join(roomName);
 
-    logger.info(`🔌 User connected to socket: ${user.name} (${user.id}) joined ${roomName}`);
+    // Track multi-session active sockets per user
+    if (!userSocketsMap.has(user.id)) {
+      userSocketsMap.set(user.id, new Set());
+    }
+    const sockets = userSocketsMap.get(user.id)!;
+    const isFirstConnection = sockets.size === 0;
+    sockets.add(socket.id);
 
-    // Update online presence
-    await User.findByIdAndUpdate(user.id, { isOnline: true, lastSeen: 'Active just now' });
-    socket.to(roomName).emit('presence:update', { userId: user.id, isOnline: true, lastSeen: 'Active just now' });
+    logger.info(`🔌 User connected to socket: ${user.name} (${user.id}) [active sessions: ${sockets.size}] joined ${roomName}`);
+
+    if (isFirstConnection) {
+      const now = new Date();
+      await User.findByIdAndUpdate(user.id, {
+        isOnline: true,
+        lastHeartbeatAt: now,
+      });
+      socket.to(roomName).emit('presence:update', {
+        userId: user.id,
+        isOnline: true,
+        lastSeen: 'Online now',
+        lastSeenAt: now.toISOString(),
+      });
+    }
+
+    // Handle presence heartbeat from client
+    socket.on('presence:heartbeat', async () => {
+      const now = new Date();
+      await User.findByIdAndUpdate(user.id, { lastHeartbeatAt: now });
+    });
 
     // Register modular feature handlers
     registerChatHandlers(io, socket);
 
     socket.on('disconnect', async () => {
-      logger.info(`🔌 User disconnected: ${user.name} (${user.id})`);
-      const lastSeen = new Date().toISOString();
-      await User.findByIdAndUpdate(user.id, { isOnline: false, lastSeen });
-      socket.to(roomName).emit('presence:update', { userId: user.id, isOnline: false, lastSeen });
+      const userSockets = userSocketsMap.get(user.id);
+      if (userSockets) {
+        userSockets.delete(socket.id);
+        if (userSockets.size === 0) {
+          userSocketsMap.delete(user.id);
+          const lastSeenAt = new Date();
+          await User.findByIdAndUpdate(user.id, {
+            isOnline: false,
+            lastSeenAt,
+            lastSeen: lastSeenAt.toISOString(),
+          });
+          logger.info(`🔌 User went offline: ${user.name} (${user.id})`);
+          socket.to(roomName).emit('presence:update', {
+            userId: user.id,
+            isOnline: false,
+            lastSeen: lastSeenAt.toISOString(),
+            lastSeenAt: lastSeenAt.toISOString(),
+          });
+        } else {
+          logger.info(`🔌 User disconnected one session: ${user.name} (${user.id}) [remaining: ${userSockets.size}]`);
+        }
+      }
     });
   });
 

@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
 import { MAIN_NAV_ITEMS } from '@/constants/nav';
+import { UserAvatar } from '@/components/ui/user-avatar';
 
 const iconMap: Record<string, any> = {
   Home,
@@ -154,14 +155,13 @@ export function Sidebar() {
           title={`Click to send ❤️ to ${partner.name}`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="relative">
-              <img
-                src={partner.avatar}
-                alt={partner.name}
-                className="h-9 w-9 rounded-full object-cover border border-white/20 shadow-md"
-              />
-              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-black" />
-            </div>
+            <UserAvatar
+              src={partner.avatar}
+              name={partner.name}
+              size="md"
+              isOnline={true}
+              showOnlineBadge={true}
+            />
             <div className="min-w-0">
               <div className="text-xs font-serif text-white line-clamp-1 group-hover:underline">
                 {partner.name} ({partner.nickname})
@@ -177,11 +177,7 @@ export function Sidebar() {
         {/* Current user session summary */}
         <div className="flex items-center justify-between px-2 pt-1 text-[11px] text-[#777777] font-mono">
           <div className="flex items-center gap-1.5">
-            <img
-              src={user.avatar}
-              alt={user.name}
-              className="h-5 w-5 rounded-full object-cover border border-white/10"
-            />
+            <UserAvatar src={user.avatar} name={user.name} size="xs" />
             <span className="text-[#AAAAAA]">Logged in as <strong className="text-white font-normal">{user.name}</strong></span>
           </div>
           <Link href="/profile" className="hover:text-white underline">

@@ -9,6 +9,7 @@ import { postService } from '@/services/post.service';
 import { formatDate } from '@/lib/date-utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MediaPickerModal } from '@/components/media/MediaPickerModal';
+import { UserAvatar } from '@/components/ui/user-avatar';
 
 export default function PostsFeedPage() {
   const { user, partner, openMediaViewer, triggerHeartEffect } = useApp();
@@ -86,11 +87,7 @@ export default function PostsFeedPage() {
       {/* Composer Card */}
       <div className="clay-card p-5 rounded-3xl border border-white/10 bg-[#0F0F0F] space-y-3 shadow-md">
         <div className="flex items-center gap-3">
-          <img
-            src={user.avatar}
-            alt={user.name}
-            className="h-10 w-10 rounded-full object-cover border border-white/20"
-          />
+          <UserAvatar src={user.avatar} name={user.name} size="md" />
           <input
             type="text"
             value={newPostContent}
@@ -175,10 +172,14 @@ export default function PostsFeedPage() {
               {/* Header */}
               <div className="p-5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <img
-                    src={post.authorAvatar}
-                    alt={post.authorName}
-                    className="h-10 w-10 rounded-full object-cover border border-white/20"
+                  <UserAvatar
+                    src={
+                      post.authorId === user.id || post.authorName?.toLowerCase() === user.name?.toLowerCase()
+                        ? user.avatar || post.authorAvatar
+                        : partner.avatar || post.authorAvatar
+                    }
+                    name={post.authorName}
+                    size="md"
                   />
                   <div>
                     <h4 className="font-serif text-sm text-white font-normal">{post.authorName}</h4>
@@ -246,10 +247,15 @@ export default function PostsFeedPage() {
                 <div className="bg-[#0A0A0A] p-5 border-t border-white/5 space-y-2.5">
                   {post.comments.map(c => (
                     <div key={c.id} className="flex items-start gap-2.5">
-                      <img
-                        src={c.userAvatar}
-                        alt={c.userName}
-                        className="h-6 w-6 rounded-full object-cover border border-white/15 shrink-0 mt-0.5"
+                      <UserAvatar
+                        src={
+                          c.userId === user.id || c.userName?.toLowerCase() === user.name?.toLowerCase()
+                            ? user.avatar || c.userAvatar
+                            : partner.avatar || c.userAvatar
+                        }
+                        name={c.userName}
+                        size="xs"
+                        className="mt-0.5"
                       />
                       <div className="text-xs">
                         <span className="font-serif text-white mr-1.5">{c.userName}:</span>

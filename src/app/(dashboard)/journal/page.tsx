@@ -8,6 +8,7 @@ import { JournalEntry, JournalMood } from '@/types';
 import { journalService } from '@/services/journal.service';
 import { Modal } from '@/components/ui/modal';
 import { formatDate } from '@/lib/date-utils';
+import { UserAvatar } from '@/components/ui/user-avatar';
 
 const MOODS: { key: JournalMood; label: string; emoji: string }[] = [
   { key: 'loved', label: 'Deeply Loved', emoji: '❤️' },
@@ -104,10 +105,11 @@ export default function JournalPage() {
               {/* Top metadata */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
                 <div className="flex items-center gap-3">
-                  <img
+                  <UserAvatar
                     src={author.avatar}
-                    alt={author.name}
-                    className="h-10 w-10 rounded-full object-cover border border-white/20 shadow-md"
+                    name={author.name}
+                    size="sm"
+                    className="border border-white/20 shadow-md"
                   />
                   <div>
                     <h4 className="font-serif text-sm text-white font-normal">{author.name}</h4>

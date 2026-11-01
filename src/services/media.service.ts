@@ -82,87 +82,196 @@ class MediaService {
     },
     onProgress?: (percent: number) => void
   ): { promise: Promise<ApiResponse<MediaAsset>>; abort: () => void } {
-    let xhrInstance: XMLHttpRequest | null = null;
+    let activeXhr: XMLHttpRequest | null = null;
+    let isAborted = false;
 
-    const promise = new Promise<ApiResponse<MediaAsset>>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhrInstance = xhr;
+    const promise = (async (): Promise<ApiResponse<MediaAsset>> => {
+      const isVideo = file.type.startsWith('video') || /\.(mp4|mov|webm|mkv|3gp)$/i.test(file.name);
+      const resourceType = isVideo ? 'video' : 'image';
 
-      const formData = new FormData();
-      formData.append('file', file);
-      if (metadata.title) formData.append('title', metadata.title);
-      if (metadata.caption) formData.append('caption', metadata.caption);
-      if (metadata.description) formData.append('description', metadata.description);
-      formData.append('categories', JSON.stringify(metadata.categories));
-      if (metadata.tags && metadata.tags.length > 0) formData.append('tags', JSON.stringify(metadata.tags));
-      if (metadata.isFavorite !== undefined) formData.append('isFavorite', String(metadata.isFavorite));
-      if (metadata.takenAt) formData.append('takenAt', metadata.takenAt);
+      // 1. Try Direct-to-Cloudinary upload via backend signed parameters (preferred, avoids Render timeouts)
+      try {
+        await authService.ensureToken();
+        const signRes = await ApiClient.post<{
+          success: boolean;
+          data: {
+            signature: string;
+            timestamp: number;
+            apiKey: string;
+            cloudName: string;
+            folder: string;
+            resourceType: string;
+            uploadUrl: string;
+          };
+        }>('/media/sign-upload', { resourceType });
 
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable && onProgress) {
-          const percent = Math.round((e.loaded / e.total) * 100);
-          onProgress(percent);
+        if (signRes && signRes.success && signRes.data && !isAborted) {
+          const { signature, timestamp, apiKey, folder, uploadUrl } = signRes.data;
+
+          const cloudFormData = new FormData();
+          cloudFormData.append('file', file);
+          cloudFormData.append('api_key', apiKey);
+          cloudFormData.append('timestamp', String(timestamp));
+          cloudFormData.append('signature', signature);
+          cloudFormData.append('folder', folder);
+
+          const cloudinaryResult = await new Promise<any>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            activeXhr = xhr;
+
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable && onProgress) {
+                // Reserve last 5% for backend database confirmation
+                const percent = Math.min(95, Math.round((e.loaded / e.total) * 95));
+                onProgress(percent);
+              }
+            };
+
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                  const data = JSON.parse(xhr.responseText);
+                  resolve(data);
+                } catch {
+                  reject(new Error('Invalid response from Cloudinary'));
+                }
+              } else {
+                reject(new Error(`Cloudinary upload failed with status ${xhr.status}`));
+              }
+            };
+
+            xhr.onerror = () => reject(new Error('Network error during Cloudinary upload'));
+            xhr.onabort = () => reject(new Error('Upload cancelled'));
+
+            xhr.open('POST', uploadUrl);
+            xhr.send(cloudFormData);
+          });
+
+          if (isAborted) throw new Error('Upload cancelled');
+
+          // 2. Confirm Cloudinary asset details with backend to store in MongoDB
+          if (onProgress) onProgress(98);
+
+          const confirmRes = await ApiClient.post<{ success: boolean; data: MediaAsset }>('/media/confirm-upload', {
+            publicId: cloudinaryResult.public_id,
+            url: cloudinaryResult.secure_url || cloudinaryResult.url,
+            thumbnailUrl: isVideo
+              ? (cloudinaryResult.secure_url || cloudinaryResult.url).replace(/\.[^/.]+$/, '.jpg')
+              : cloudinaryResult.secure_url || cloudinaryResult.url,
+            mediaType: isVideo ? 'video' : 'image',
+            mimeType: file.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+            sizeBytes: cloudinaryResult.bytes || file.size,
+            width: cloudinaryResult.width,
+            height: cloudinaryResult.height,
+            duration: cloudinaryResult.duration,
+            title: metadata.title || file.name.replace(/\.[^/.]+$/, ''),
+            caption: metadata.caption || '',
+            description: metadata.description || '',
+            categories: metadata.categories,
+            tags: metadata.tags || [],
+            isFavorite: metadata.isFavorite,
+            originalFilename: file.name,
+            takenAt: metadata.takenAt,
+          });
+
+          if (confirmRes && confirmRes.success && confirmRes.data) {
+            const newAsset = confirmRes.data;
+            this.assets = [newAsset, ...this.assets.filter((a) => a.id !== newAsset.id)];
+            this.saveToCache();
+            this.notify();
+            if (onProgress) onProgress(100);
+            return { success: true, data: newAsset };
+          }
         }
-      };
+      } catch (err: any) {
+        if (isAborted || err?.message === 'Upload cancelled') {
+          throw new Error('Upload cancelled');
+        }
+        console.warn('Direct Cloudinary upload failed or unavailable, falling back to proxied upload:', err?.message);
+      }
 
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const res = JSON.parse(xhr.responseText);
-            if (res.success && res.data) {
-              const newAsset: MediaAsset = res.data;
-              this.assets = [newAsset, ...this.assets.filter((a) => a.id !== newAsset.id)];
-              this.saveToCache();
-              this.notify();
-              resolve({ success: true, data: newAsset });
-            } else {
-              resolve(res);
+      if (isAborted) throw new Error('Upload cancelled');
+
+      // 3. Fallback: Proxied upload via backend /media/upload route
+      return new Promise<ApiResponse<MediaAsset>>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        activeXhr = xhr;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        if (metadata.title) formData.append('title', metadata.title);
+        if (metadata.caption) formData.append('caption', metadata.caption);
+        if (metadata.description) formData.append('description', metadata.description);
+        formData.append('categories', JSON.stringify(metadata.categories));
+        if (metadata.tags && metadata.tags.length > 0) formData.append('tags', JSON.stringify(metadata.tags));
+        if (metadata.isFavorite !== undefined) formData.append('isFavorite', String(metadata.isFavorite));
+        if (metadata.takenAt) formData.append('takenAt', metadata.takenAt);
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable && onProgress) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            onProgress(percent);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const res = JSON.parse(xhr.responseText);
+              if (res.success && res.data) {
+                const newAsset: MediaAsset = res.data;
+                this.assets = [newAsset, ...this.assets.filter((a) => a.id !== newAsset.id)];
+                this.saveToCache();
+                this.notify();
+                resolve({ success: true, data: newAsset });
+              } else {
+                resolve(res);
+              }
+            } catch {
+              reject(new Error('Invalid response from server'));
             }
-          } catch {
-            reject(new Error('Invalid response from server'));
+          } else {
+            try {
+              const errRes = JSON.parse(xhr.responseText);
+              reject(new Error(errRes.message || 'File upload failed'));
+            } catch {
+              reject(new Error(`Upload failed with status ${xhr.status}`));
+            }
           }
-        } else {
-          try {
-            const errRes = JSON.parse(xhr.responseText);
-            reject(new Error(errRes.message || 'File upload failed'));
-          } catch {
-            reject(new Error(`Upload failed with status ${xhr.status}`));
+        };
+
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.onabort = () => reject(new Error('Upload cancelled'));
+
+        const baseUrl = API_BASE_URL;
+        xhr.open('POST', `${baseUrl}/media/upload`);
+
+        (async () => {
+          let token =
+            (typeof window !== 'undefined' &&
+              (localStorage.getItem('couple_auth_token') || localStorage.getItem('auth_token'))) ||
+            '';
+
+          if (!token) {
+            token = (await authService.ensureToken()) || '';
           }
-        }
-      };
 
-      xhr.onerror = () => reject(new Error('Network error during upload'));
-      xhr.onabort = () => reject(new Error('Upload cancelled'));
+          if (token) {
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          }
 
-      // Configure URL and headers
-      const baseUrl = API_BASE_URL;
-      xhr.open('POST', `${baseUrl}/media/upload`);
-
-      // Authentication token with auto-recovery if missing or expired
-      (async () => {
-        let token =
-          (typeof window !== 'undefined' &&
-            (localStorage.getItem('couple_auth_token') || localStorage.getItem('auth_token'))) ||
-          '';
-
-        if (!token) {
-          token = (await authService.ensureToken()) || '';
-        }
-
-        if (token) {
-          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-        }
-
-        xhr.send(formData);
-      })().catch((err) => {
-        reject(new Error(err?.message || 'Authentication error during upload'));
+          xhr.send(formData);
+        })().catch((err) => {
+          reject(new Error(err?.message || 'Authentication error during upload'));
+        });
       });
-    });
+    })();
 
     return {
       promise,
       abort: () => {
-        if (xhrInstance) xhrInstance.abort();
+        isAborted = true;
+        if (activeXhr) activeXhr.abort();
       },
     };
   }

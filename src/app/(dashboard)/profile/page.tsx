@@ -24,8 +24,10 @@ import { formatDate } from '@/lib/date-utils';
 import { memoryService } from '@/services/memory.service';
 import { musicService } from '@/services/music.service';
 import { bucketListService } from '@/services/bucketList.service';
+import { mediaService } from '@/services/media.service';
 import { Song } from '@/types';
 import { Modal } from '@/components/ui/modal';
+import { UserAvatar } from '@/components/ui/user-avatar';
 
 export default function ProfilePage() {
   const { user, partner, couple, logout, updateUserProfile, triggerHeartEffect, playSong } = useApp();
@@ -78,19 +80,27 @@ export default function ProfilePage() {
     setIsEditModalOpen(true);
   };
 
-  const handleAvatarFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsUploadingAvatar(true);
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setEditAvatar(reader.result);
+    try {
+      const uploadObj = mediaService.uploadFile(file, {
+        categories: ['profile'],
+        title: `${user.name} Avatar`,
+      });
+      const res = await uploadObj.promise;
+      if (res.success && res.data?.url) {
+        setEditAvatar(res.data.url);
+      } else {
+        alert('Failed to upload avatar image to Cloudinary');
       }
+    } catch (err: any) {
+      alert(`Avatar upload error: ${err?.message || 'Upload failed'}`);
+    } finally {
       setIsUploadingAvatar(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {

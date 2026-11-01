@@ -31,6 +31,7 @@ import { compressImage } from '@/lib/media-compress';
 import { ApiClient } from '@/services/api/client';
 import { Modal } from '@/components/ui/modal';
 import { formatDate } from '@/lib/date-utils';
+import { UserAvatar } from '@/components/ui/user-avatar';
 
 const EMOJI_STICKERS = ['❤️', '✨', '💍', '🌸', '🥂', '🕊️', '💫', '🧸', '🌹', '🔥', '🥰', '🧿', '👑', '💌'];
 
@@ -400,10 +401,10 @@ export default function StoriesPage() {
                 {/* Top author tag & stickers */}
                 <div className="relative z-10 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <img
+                    <UserAvatar
                       src={author.avatar}
-                      alt={author.name}
-                      className="h-8 w-8 rounded-full object-cover border border-white/20"
+                      name={author.name}
+                      size="sm"
                     />
                     <div>
                       <span className="text-xs font-serif text-white">{author.name}</span>
@@ -520,10 +521,10 @@ export default function StoriesPage() {
               {/* Author & Close Bar */}
               <div className="relative z-30 mt-3 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <img
+                  <UserAvatar
                     src={activeStory.authorId === user.id ? user.avatar : partner.avatar}
-                    alt="Author"
-                    className="h-8 w-8 rounded-full object-cover border border-white/30"
+                    name={activeStory.authorId === user.id ? user.name : partner.name}
+                    size="sm"
                   />
                   <div>
                     <h4 className="font-serif text-xs text-white">

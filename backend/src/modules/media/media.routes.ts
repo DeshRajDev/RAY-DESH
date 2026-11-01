@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import { v2 as cloudinary } from 'cloudinary';
+import { env } from '../../config/env';
 import { authenticate } from '../../middleware/authenticate';
 import { requireCouple } from '../../middleware/authorize';
 import { AuthenticatedRequest } from '../../types';
@@ -72,6 +74,128 @@ router.get('/upload', (_req: Request, res: Response) => {
     success: true,
     message: 'Media upload endpoint is active. Send a POST request with multipart/form-data containing "file" and your Authorization Bearer token.',
   });
+});
+
+// POST generate secure signed upload parameters for direct client -> Cloudinary upload
+router.post('/sign-upload', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const cloudName = env.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = env.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API_KEY;
+    const apiSecret = env.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_API_SECRET;
+
+    if (!cloudName || !apiKey || !apiSecret) {
+      return sendError(res, 'Direct Cloudinary upload is not configured on the server', 503);
+    }
+
+    const { resourceType = 'auto' } = req.body;
+    const validResourceType = resourceType === 'video' ? 'video' : resourceType === 'image' ? 'image' : 'auto';
+    const timestamp = Math.round(Date.now() / 1000);
+    const folder = 'couple_sanctuary';
+
+    const paramsToSign = {
+      folder,
+      timestamp,
+    };
+
+    const signature = cloudinary.utils.api_sign_request(paramsToSign, apiSecret);
+
+    return sendSuccess(res, {
+      signature,
+      timestamp,
+      apiKey,
+      cloudName,
+      folder,
+      resourceType: validResourceType,
+      uploadUrl: `https://api.cloudinary.com/v1_1/${cloudName}/${validResourceType}/upload`,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to generate upload signature';
+    return sendError(res, msg, 500);
+  }
+});
+
+// POST confirm direct-to-Cloudinary upload and save metadata to MongoDB (idempotent)
+router.post('/confirm-upload', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const {
+      publicId,
+      url,
+      thumbnailUrl,
+      mediaType = 'image',
+      mimeType = 'image/jpeg',
+      sizeBytes = 0,
+      width,
+      height,
+      duration,
+      title,
+      caption,
+      description,
+      categories,
+      tags,
+      isFavorite,
+      originalFilename,
+      takenAt,
+    } = req.body;
+
+    if (!url || !publicId) {
+      return sendError(res, 'Missing required Cloudinary asset information (url or publicId)', 400);
+    }
+
+    // Idempotency: avoid duplicate records if client retried
+    const existing = await MediaAsset.findOne({
+      coupleId: new mongoose.Types.ObjectId(req.couple!.id),
+      storageKey: publicId,
+    });
+    if (existing) {
+      return sendSuccess(res, existing.toJSON(), 'Media already recorded', 200);
+    }
+
+    let resolvedMediaType: 'image' | 'video' | 'audio' | 'document' = 'image';
+    if (mediaType === 'video' || mimeType.startsWith('video')) resolvedMediaType = 'video';
+    else if (mediaType === 'audio' || mimeType.startsWith('audio')) resolvedMediaType = 'audio';
+
+    const parsedCategories = parseList(categories);
+    if (parsedCategories.length === 0) parsedCategories.push('uncategorized');
+
+    // Video thumbnail generation convention for Cloudinary: change extension to .jpg
+    let resolvedThumbnail = thumbnailUrl;
+    if (resolvedMediaType === 'video' && !resolvedThumbnail) {
+      resolvedThumbnail = url.replace(/\.[^/.]+$/, '.jpg');
+    }
+
+    const asset = await MediaAsset.create({
+      coupleId: new mongoose.Types.ObjectId(req.couple!.id),
+      ownerId: new mongoose.Types.ObjectId(req.user!.id),
+      ownerRole: req.user!.role,
+      storageKey: publicId,
+      url,
+      thumbnailUrl: resolvedThumbnail || url,
+      mediaType: resolvedMediaType,
+      mimeType,
+      sizeBytes: Number(sizeBytes) || 0,
+      width: width ? Number(width) : undefined,
+      height: height ? Number(height) : undefined,
+      duration: duration ? Math.round(Number(duration)) : undefined,
+      title: title ? String(title).trim() : (originalFilename?.replace(/\.[^/.]+$/, '') || 'Romantic Moment'),
+      caption: caption ? String(caption).trim() : '',
+      description: description ? String(description).trim() : '',
+      categories: parsedCategories,
+      tags: parseList(tags),
+      originalFilename: originalFilename || 'uploaded_media',
+      storageProvider: 'cloudinary',
+      isFavorite: isFavorite === 'true' || isFavorite === true,
+      isPublished: true,
+      takenAt: takenAt ? new Date(takenAt) : undefined,
+    });
+
+    // Auto-sync with Reels if applicable
+    await syncReelForAsset(asset, req.couple!.id, req.user!.id, req.user!.name);
+
+    return sendSuccess(res, asset.toJSON(), 'Media confirmed and saved', 201);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to confirm upload';
+    return sendError(res, msg, 500);
+  }
 });
 
 // POST upload single media file with categories & tags (flexible for file, image, media, or video field names)

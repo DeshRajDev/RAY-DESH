@@ -79,6 +79,16 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
       // Broadcast to partner in the couple room
       socket.to(roomName).emit('message:new', messageJson);
 
+      // Broadcast updated unread count for partner
+      Message.countDocuments({ coupleId: couple.id, receiverId, isRead: false })
+        .then((unreadCount: number) => {
+          socket.to(roomName).emit('unread:count', {
+            userId: receiverId.toString(),
+            count: unreadCount,
+          });
+        })
+        .catch(() => {});
+
       // Trigger Web Push notification in background
       const { sendPushToUser } = require('../services/push.service');
       sendPushToUser(receiverId, {
@@ -141,6 +151,13 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
         readerId: user.id,
       });
       socket.to(roomName).emit('message:read', { readerId: user.id, messageIds: ids });
+
+      // Emit zero (or remaining) unread count to reader
+      Message.countDocuments({ coupleId: couple.id, receiverId: user.id, isRead: false })
+        .then((count: number) => {
+          socket.emit('unread:count', { userId: user.id, count });
+        })
+        .catch(() => {});
     } catch (err) {
       logger.error({ err }, 'Socket mark read error');
     }

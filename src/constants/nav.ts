@@ -31,7 +31,7 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
 export const MOBILE_PRIMARY_NAV = [
   { title: 'Home', href: '/dashboard', iconName: 'Home' },
   { title: 'Chat', href: '/chat', iconName: 'MessageCircle' },
-  { title: 'Memories', href: '/memories', iconName: 'Camera' },
+  { title: 'Reels', href: '/reels', iconName: 'Film' },
   { title: 'Stories', href: '/stories', iconName: 'Sparkles' },
   { title: 'More', href: '#more', iconName: 'Grid' },
 ];

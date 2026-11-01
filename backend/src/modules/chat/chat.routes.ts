@@ -285,11 +285,30 @@ router.post('/read', authenticate, requireCouple, async (req: AuthenticatedReque
         readerId: req.user!.id,
         messageIds: messageIds || [],
       });
+      io.to(`couple:${req.couple!.id}`).emit('unread:count', {
+        userId: req.user!.id,
+        count: 0,
+      });
     }
 
-    return sendSuccess(res, { read: true });
+    return sendSuccess(res, { read: true, unreadCount: 0 });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to mark messages read';
+    return sendError(res, msg, 500);
+  }
+});
+
+// GET unread message count for the authenticated recipient
+router.get('/unread-count', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const count = await Message.countDocuments({
+      coupleId: req.couple!.id,
+      receiverId: req.user!.id,
+      isRead: false,
+    });
+    return sendSuccess(res, { count });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Failed to get unread count';
     return sendError(res, msg, 500);
   }
 });

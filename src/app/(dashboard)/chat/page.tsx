@@ -39,6 +39,7 @@ import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { formatDate, formatTime } from '@/lib/date-utils';
 import { Modal } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
+import { UserAvatar } from '@/components/ui/user-avatar';
 
 const POPULAR_REACTIONS = ['❤️', '😂', '🥹', '😘', '😍', '😢', '🔥', '👍', '🎉'];
 
@@ -144,7 +145,11 @@ export default function ChatPage() {
       setMessages(updated);
     });
 
-    // Load initial messages from backend
+    // Load initial messages and latest partner presence from backend
+    chatService.fetchPartnerPresence().then(p => {
+      if (p) setPartnerPresence(p);
+    });
+
     chatService.getMessages()
       .then(res => {
         setMessages(res.data ?? []);
@@ -323,17 +328,31 @@ export default function ChatPage() {
       return <span className="text-emerald-400 font-medium italic">typing...</span>;
     }
     if (partnerPresence.isOnline) {
-      return <span className="text-emerald-400 font-medium">online</span>;
+      return <span className="text-emerald-400 font-medium">Online now</span>;
     }
-    if (partnerPresence.lastSeen) {
-      const date = new Date(partnerPresence.lastSeen);
-      const now = new Date();
-      const isToday = date.toDateString() === now.toDateString();
-      const timeStr = formatTime(partnerPresence.lastSeen);
-      if (isToday) {
-        return <span className="text-[#888888]">last seen today at {timeStr}</span>;
+
+    const rawTime = partnerPresence.lastSeenAt || partnerPresence.lastSeen;
+    if (rawTime) {
+      const date = new Date(rawTime);
+      if (!isNaN(date.getTime())) {
+        const diffMs = Math.max(0, Date.now() - date.getTime());
+        const diffMins = Math.floor(diffMs / 60000);
+
+        if (diffMins < 1) {
+          return <span className="text-[#888888]">last seen just now</span>;
+        }
+        if (diffMins < 60) {
+          return <span className="text-[#888888]">last seen {diffMins}m ago</span>;
+        }
+
+        const now = new Date();
+        const isToday = date.toDateString() === now.toDateString();
+        const timeStr = formatTime(rawTime);
+        if (isToday) {
+          return <span className="text-[#888888]">last seen today at {timeStr}</span>;
+        }
+        return <span className="text-[#888888]">last seen {formatDate(rawTime, 'short')} at {timeStr}</span>;
       }
-      return <span className="text-[#888888]">last seen {formatDate(partnerPresence.lastSeen, 'short')} at {timeStr}</span>;
     }
     return <span className="text-[#666666]">offline</span>;
   }, [isPartnerTyping, partnerPresence]);
@@ -350,16 +369,13 @@ export default function ChatPage() {
         {/* Chat Top Header */}
         <div className="flex h-16 items-center justify-between border-b border-white/10 bg-[#0A0A0A]/95 px-3 sm:px-6 backdrop-blur-md z-20 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <img
-                src={partner.avatar}
-                alt={partner.name}
-                className="h-10 w-10 rounded-full object-cover border border-white/20 shadow-md"
-              />
-              {partnerPresence.isOnline && (
-                <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-black" />
-              )}
-            </div>
+            <UserAvatar
+              src={partner.avatar}
+              name={partner.name}
+              size="lg"
+              isOnline={partnerPresence.isOnline}
+              showOnlineBadge={true}
+            />
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-serif text-sm sm:text-base font-medium text-white">
@@ -739,9 +755,7 @@ export default function ChatPage() {
                 exit={{ opacity: 0, y: 5 }}
                 className="flex items-center gap-2 max-w-xs"
               >
-                <div className="h-7 w-7 rounded-full overflow-hidden border border-white/20 shrink-0">
-                  <img src={partner.avatar} alt={partner.name} className="h-full w-full object-cover" />
-                </div>
+                <UserAvatar src={partner.avatar} name={partner.name} size="xs" />
                 <div className="rounded-2xl rounded-tl-none bg-[#181818]/90 border border-white/10 px-3.5 py-2 flex items-center gap-1.5 shadow-md">
                   <span className="w-1.5 h-1.5 bg-white/70 rounded-full animate-bounce [animation-delay:-0.3s]" />
                   <span className="w-1.5 h-1.5 bg-white/70 rounded-full animate-bounce [animation-delay:-0.15s]" />
@@ -946,10 +960,11 @@ export default function ChatPage() {
               </div>
 
               <div className="text-center pb-6 border-b border-white/10">
-                <img
+                <UserAvatar
                   src={partner.avatar}
-                  alt={partner.name}
-                  className="h-20 w-20 rounded-full mx-auto object-cover border-2 border-white/20 shadow-xl mb-3"
+                  name={partner.name}
+                  size="xl"
+                  className="mx-auto mb-3 border-2 border-white/20 shadow-xl"
                 />
                 <h3 className="font-serif text-lg text-white font-normal">{partner.name}</h3>
                 <p className="text-xs text-[#777777]">{partner.nickname}</p>

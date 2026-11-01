@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { chatService } from '@/services/chat.service';
 import { 
   Home, 
   MessageCircle, 
@@ -54,6 +55,15 @@ const iconMap: Record<string, any> = {
 export function MobileNav() {
   const pathname = usePathname();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
+
+  useEffect(() => {
+    chatService.fetchUnreadCount();
+    const unsub = chatService.subscribeUnread((count) => {
+      setUnreadChatCount(count);
+    });
+    return unsub;
+  }, []);
 
   interface PrimaryTab {
     title: string;
@@ -65,8 +75,13 @@ export function MobileNav() {
 
   const primaryTabs: PrimaryTab[] = [
     { title: 'Home', href: '/dashboard', icon: Home },
-    { title: 'Chat', href: '/chat', icon: MessageCircle },
-    { title: 'Memories', href: '/memories', icon: Camera },
+    { 
+      title: 'Chat', 
+      href: '/chat', 
+      icon: MessageCircle,
+      badge: unreadChatCount > 0 ? unreadChatCount : undefined 
+    },
+    { title: 'Reels', href: '/reels', icon: Film },
     { title: 'Stories', href: '/stories', icon: Sparkles },
     { title: 'More', href: '#more', icon: Grid, onClick: () => setIsMoreOpen(true) },
   ];
@@ -106,7 +121,9 @@ export function MobileNav() {
                 <div className="relative">
                   <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                   {tab.badge && (
-                    <span className="absolute -top-1 -right-2 h-2 w-2 rounded-full bg-white ring-2 ring-black" />
+                    <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-1 rounded-full bg-rose-500 text-[9px] font-bold text-white flex items-center justify-center ring-2 ring-[#0A0A0A]">
+                      {typeof tab.badge === 'number' && tab.badge > 99 ? '99+' : tab.badge}
+                    </span>
                   )}
                 </div>
                 <span className="text-[9px] sm:text-[10px] font-normal tracking-wide">{tab.title}</span>

@@ -1,6 +1,8 @@
 import { Message, ApiResponse, MessageAttachment } from '@/types';
 import { ApiClient } from './api/client';
 import { notificationService } from './notification.service';
+import { mediaService } from './media.service';
+import { updateAppBadge } from '@/lib/badge';
 import { io, Socket } from 'socket.io-client';
 
 const CHAT_STORAGE_KEY = 'sanctuary_chat_messages_v3';
@@ -24,7 +26,8 @@ export const DEFAULT_WALLPAPER: ChatWallpaper = {
 export interface UserPresence {
   userId: string;
   isOnline: boolean;
-  lastSeen?: string; // ISO string
+  lastSeen?: string; // ISO string or relative
+  lastSeenAt?: string; // ISO string
 }
 
 class ChatService {
@@ -34,6 +37,9 @@ class ChatService {
   private presenceListeners: ((presence: UserPresence) => void)[] = [];
   private wallpaperListeners: ((wallpaper: ChatWallpaper) => void)[] = [];
   private connectionListeners: ((isConnected: boolean) => void)[] = [];
+  private unreadListeners: ((count: number) => void)[] = [];
+  private unreadCount: number = 0;
+  private heartbeatInterval: any = null;
   private channel: BroadcastChannel | null = null;
   private currentWallpaper: ChatWallpaper = DEFAULT_WALLPAPER;
   private typingTimer: NodeJS.Timeout | null = null;
@@ -104,6 +110,8 @@ class ChatService {
     this.socket.on('connect', () => {
       this.isConnected = true;
       this.notifyConnection();
+      this.startHeartbeat();
+      this.fetchUnreadCount().catch(() => {});
 
       // Check if we have un-delivered messages in our local state to acknowledge
       this.acknowledgeUndelivered();
@@ -218,7 +226,16 @@ class ChatService {
       }
     });
 
-    // 5. Message reaction updates
+    // 5. Unread count updates for Web Badging API and UI indicators
+    this.socket.on('unread:count', (data: { userId?: string; count: number }) => {
+      if (!data.userId || data.userId === this.currentActiveUserId) {
+        this.unreadCount = Math.max(0, data.count || 0);
+        updateAppBadge(this.unreadCount);
+        this.unreadListeners.forEach((l) => l(this.unreadCount));
+      }
+    });
+
+    // 6. Message reaction updates
     this.socket.on('message:reaction', (data: any) => {
       const updated = this.normalizeMessage(data);
       const idx = this.messages.findIndex((m) => m.id === updated.id);
@@ -230,7 +247,24 @@ class ChatService {
     });
   }
 
+  private startHeartbeat() {
+    this.stopHeartbeat();
+    this.heartbeatInterval = setInterval(() => {
+      if (this.socket && this.socket.connected) {
+        this.socket.emit('presence:heartbeat');
+      }
+    }, 25000);
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
   public disconnectSocket() {
+    this.stopHeartbeat();
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
@@ -386,15 +420,12 @@ class ChatService {
         const stored = localStorage.getItem(`sanctuary_presence_${partnerId}`);
         if (stored) {
           const parsed = JSON.parse(stored) as UserPresence;
-          if (parsed.lastSeen) {
-            const diffMs = Date.now() - new Date(parsed.lastSeen).getTime();
-            const isReallyOnline = parsed.isOnline && diffMs < 45000;
-            return {
-              userId: partnerId,
-              isOnline: isReallyOnline,
-              lastSeen: parsed.lastSeen,
-            };
-          }
+          return {
+            userId: partnerId,
+            isOnline: Boolean(parsed.isOnline),
+            lastSeen: parsed.lastSeen,
+            lastSeenAt: parsed.lastSeenAt || parsed.lastSeen,
+          };
         }
       } catch {
         // ignore
@@ -404,7 +435,65 @@ class ChatService {
     return {
       userId: partnerId,
       isOnline: false,
-      lastSeen: new Date(Date.now() - 3600000).toISOString(),
+      lastSeen: undefined,
+      lastSeenAt: undefined,
+    };
+  }
+
+  public async fetchPartnerPresence(): Promise<UserPresence | null> {
+    try {
+      const res = await ApiClient.get<{
+        success: boolean;
+        data: { userId: string; isOnline: boolean; lastSeenAt?: string; lastSeen?: string };
+      }>('/users/presence');
+
+      if (res && res.success && res.data) {
+        const data: UserPresence = {
+          userId: res.data.userId,
+          isOnline: Boolean(res.data.isOnline),
+          lastSeen: res.data.lastSeen,
+          lastSeenAt: res.data.lastSeenAt,
+        };
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(`sanctuary_presence_${data.userId}`, JSON.stringify(data));
+          } catch {
+            // ignore
+          }
+        }
+        this.presenceListeners.forEach((l) => l(data));
+        return data;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
+  public async fetchUnreadCount(): Promise<number> {
+    try {
+      const res = await ApiClient.get<{ success: boolean; data: { count: number } }>('/chat/unread-count');
+      if (res && res.success && typeof res.data?.count === 'number') {
+        this.unreadCount = Math.max(0, res.data.count);
+        updateAppBadge(this.unreadCount);
+        this.unreadListeners.forEach((l) => l(this.unreadCount));
+        return this.unreadCount;
+      }
+    } catch {
+      // ignore
+    }
+    return this.unreadCount;
+  }
+
+  public getUnreadCount(): number {
+    return this.unreadCount;
+  }
+
+  public subscribeUnread(listener: (count: number) => void): () => void {
+    this.unreadListeners.push(listener);
+    listener(this.unreadCount);
+    return () => {
+      this.unreadListeners = this.unreadListeners.filter((l) => l !== listener);
     };
   }
 
@@ -484,37 +573,43 @@ class ChatService {
     } catch {
       // non-blocking
     }
+
+    // Immediately recalculate local unread count and app badge
+    if (messageIds && messageIds.length > 0) {
+      this.unreadCount = Math.max(0, this.unreadCount - messageIds.length);
+    } else {
+      this.unreadCount = 0;
+    }
+    updateAppBadge(this.unreadCount);
+    this.unreadListeners.forEach((l) => l(this.unreadCount));
   }
 
-  // --- Genuine Media Upload ---
+  // --- Genuine Media Upload with Direct Cloudinary Pipeline ---
   public async uploadMedia(file: File): Promise<{
     url: string;
     type: 'image' | 'video' | 'audio';
     name: string;
     size: string;
   }> {
-    const formData = new FormData();
-    formData.append('file', file);
+    const isVideo = file.type.startsWith('video') || /\.(mp4|mov|webm|mkv|3gp)$/i.test(file.name);
+    const isAudio = file.type.startsWith('audio') || /\.(mp3|wav|ogg|m4a)$/i.test(file.name);
+    const mediaType: 'image' | 'video' | 'audio' = isVideo ? 'video' : isAudio ? 'audio' : 'image';
 
-    const res = await ApiClient.upload<ApiResponse<any>>('/media/upload', formData);
+    const uploadObj = mediaService.uploadFile(file, {
+      categories: ['chat'],
+      title: file.name.replace(/\.[^/.]+$/, ''),
+    });
+
+    const res = await uploadObj.promise;
     if (!res.success || !res.data) {
-      throw new Error(res.message || 'Media upload failed');
+      throw new Error((res as any).message || 'Media upload failed');
     }
-
-    const data = res.data;
-    const resolvedUrl = ApiClient.resolveAssetUrl(data.url);
-    const mime = data.mimeType || file.type;
-    const type: 'image' | 'video' | 'audio' = mime.startsWith('video')
-      ? 'video'
-      : mime.startsWith('audio')
-      ? 'audio'
-      : 'image';
 
     const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
 
     return {
-      url: resolvedUrl,
-      type,
+      url: res.data.url,
+      type: mediaType,
       name: file.name,
       size: `${sizeMb} MB`,
     };

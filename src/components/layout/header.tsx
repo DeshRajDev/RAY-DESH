@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Bell, Search, Heart, Cake } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
+import { UserAvatar } from '@/components/ui/user-avatar';
 
 export function Header() {
   const { 
@@ -83,15 +84,16 @@ export function Header() {
         {/* Partner avatar */}
         <div
           onClick={(e) => triggerHeartEffect(e.clientX, e.clientY)}
-          className="relative cursor-pointer pl-1"
+          className="relative cursor-pointer pl-1 hover:scale-105 transition-transform"
           title={`Tap to send ❤️ to ${partner.name}`}
         >
-          <img
+          <UserAvatar
             src={partner.avatar}
-            alt={partner.name}
-            className="h-8 w-8 rounded-full object-cover border border-white/20 shadow-md hover:scale-105 transition-transform"
+            name={partner.name}
+            size="sm"
+            isOnline={true}
+            showOnlineBadge={true}
           />
-          <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-black" />
         </div>
       </div>
     </header>

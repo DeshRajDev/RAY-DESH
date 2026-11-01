@@ -16,6 +16,8 @@ export interface IUser extends Document {
   statusMessage?: string;
   isOnline: boolean;
   lastSeen?: string;
+  lastSeenAt?: Date;
+  lastHeartbeatAt?: Date;
   role: 'partner1' | 'partner2';
   coupleId?: Types.ObjectId;
   createdAt: Date;
@@ -39,6 +41,8 @@ const userSchema = new Schema<IUser>(
     statusMessage: { type: String, default: '' },
     isOnline: { type: Boolean, default: false },
     lastSeen: { type: String, default: 'Recently active' },
+    lastSeenAt: { type: Date },
+    lastHeartbeatAt: { type: Date },
     role: { type: String, enum: ['partner1', 'partner2'], required: true },
     coupleId: { type: Schema.Types.ObjectId, ref: 'Couple', index: true },
   },
