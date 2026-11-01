@@ -304,6 +304,54 @@ export function BirthdayCelebrationHome() {
   const [isUploadingScrapbook, setIsUploadingScrapbook] = useState(false);
   const scrapbookFileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Gallery Assets from Media Library
+  const [galleryAssets, setGalleryAssets] = useState<MediaAsset[]>([]);
+
+  // Persistent photo overrides for Message Cards and Surprise Boxes
+  const [cardPhotoOverrides, setCardPhotoOverrides] = useState<Record<string, string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ray_birthday_card_photos');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return {};
+  });
+
+  const [surprisePhotoOverrides, setSurprisePhotoOverrides] = useState<Record<string, string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ray_birthday_surprise_photos');
+        if (stored) return JSON.parse(stored);
+      } catch {}
+    }
+    return {};
+  });
+
+  // Target for media picker modal
+  const [pickerTarget, setPickerTarget] = useState<
+    | { type: 'scrapbook' }
+    | { type: 'card'; id: string; title: string }
+    | { type: 'surprise'; id: string; title: string }
+    | null
+  >(null);
+
+  const getCardPhoto = (cardId: string, index: number): string => {
+    if (cardPhotoOverrides[cardId]) return cardPhotoOverrides[cardId];
+    if (galleryAssets.length > 0) {
+      return galleryAssets[index % galleryAssets.length]?.url || rayPhoto || '';
+    }
+    return rayPhoto || '';
+  };
+
+  const getSurprisePhoto = (surpriseId: string, index: number): string => {
+    if (surprisePhotoOverrides[surpriseId]) return surprisePhotoOverrides[surpriseId];
+    if (galleryAssets.length > 0) {
+      return galleryAssets[(index + 2) % galleryAssets.length]?.url || galleryAssets[index % galleryAssets.length]?.url || rayPhoto || '';
+    }
+    return rayPhoto || '';
+  };
+
   const saveCustomScrapbookPhotos = (items: ScrapbookItem[]) => {
     setCustomScrapbookPhotos(items);
     if (typeof window !== 'undefined') {
@@ -356,17 +404,39 @@ export function BirthdayCelebrationHome() {
   };
 
   const handleSelectFromLibrary = (selectedAssets: MediaAsset[]) => {
-    const newItems: ScrapbookItem[] = selectedAssets.map((asset, i) => ({
-      id: `sb_asset_${asset.id || Date.now()}_${i}`,
-      url: asset.url,
-      title: asset.title || 'Ray Photograph',
-      note: asset.description || asset.caption || 'A treasured photograph of Ray from our sanctuary media library.',
-      tag: 'Sanctuary Photo',
-      date: new Date(asset.createdAt || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      rotation: i % 2 === 0 ? 'rotate-[2deg]' : 'rotate-[-2deg]',
-    }));
-    saveCustomScrapbookPhotos([...newItems, ...customScrapbookPhotos]);
+    if (!selectedAssets || selectedAssets.length === 0) return;
+
+    if (pickerTarget?.type === 'card') {
+      const updated = { ...cardPhotoOverrides, [pickerTarget.id]: selectedAssets[0].url };
+      setCardPhotoOverrides(updated);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('ray_birthday_card_photos', JSON.stringify(updated));
+        } catch {}
+      }
+    } else if (pickerTarget?.type === 'surprise') {
+      const updated = { ...surprisePhotoOverrides, [pickerTarget.id]: selectedAssets[0].url };
+      setSurprisePhotoOverrides(updated);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('ray_birthday_surprise_photos', JSON.stringify(updated));
+        } catch {}
+      }
+    } else {
+      const newItems: ScrapbookItem[] = selectedAssets.map((asset, i) => ({
+        id: `sb_asset_${asset.id || Date.now()}_${i}`,
+        url: asset.url,
+        title: asset.title || 'Ray Photograph',
+        note: asset.description || asset.caption || 'A treasured photograph of Ray from our sanctuary media library.',
+        tag: 'Sanctuary Photo',
+        date: new Date(asset.createdAt || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        rotation: i % 2 === 0 ? 'rotate-[2deg]' : 'rotate-[-2deg]',
+      }));
+      saveCustomScrapbookPhotos([...newItems, ...customScrapbookPhotos]);
+    }
+
     setIsMediaPickerOpen(false);
+    setPickerTarget(null);
     triggerHeartEffect();
   };
 
@@ -379,6 +449,12 @@ export function BirthdayCelebrationHome() {
   useEffect(() => {
     birthdayService.getBirthdayData().then(res => setBData(res.data ?? null));
     memoryService.getMemories().then(res => setMemories(res.data ?? []));
+    mediaService.getMedia({ limit: 50 }).then(res => {
+      if (res.data?.items) {
+        const imgs = res.data.items.filter(item => item.mediaType === 'image' || !item.mediaType);
+        setGalleryAssets(imgs);
+      }
+    });
     bucketListService.getItems().then(res => {
       if (res.data) {
         const set = new Set(res.data.map(i => i.title.toLowerCase()));
@@ -388,9 +464,16 @@ export function BirthdayCelebrationHome() {
 
     const unsubB = birthdayService.subscribe(setBData);
     const unsubM = memoryService.subscribe(setMemories);
+    const unsubMedia = mediaService.subscribe(assets => {
+      if (assets) {
+        const imgs = assets.filter(item => item.mediaType === 'image' || !item.mediaType);
+        setGalleryAssets(imgs);
+      }
+    });
     return () => {
       unsubB();
       unsubM();
+      unsubMedia();
     };
   }, []);
 
@@ -540,39 +623,73 @@ export function BirthdayCelebrationHome() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {BIRTHDAY_CARDS.map(card => (
-            <motion.div
-              key={card.id}
-              whileHover={{ y: -3, scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setActiveCard(card)}
-              className="cursor-pointer rounded-2xl bg-gradient-to-b from-[#161616] to-[#0D0D0D] border border-white/10 p-5 shadow-[0_8px_20px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.15)] flex flex-col justify-between space-y-3 group transition-all"
-            >
-              <div className="flex items-center justify-between">
-                <span className="px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-mono uppercase tracking-wider text-[#AAAAAA]">
-                  {card.tag}
-                </span>
-                <Heart className="h-4 w-4 text-white/50 group-hover:text-white transition-colors" />
-              </div>
+          {BIRTHDAY_CARDS.map((card, idx) => {
+            const photo = getCardPhoto(card.id, idx);
+            return (
+              <motion.div
+                key={card.id}
+                whileHover={{ y: -3, scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setActiveCard(card)}
+                className="cursor-pointer rounded-2xl bg-gradient-to-b from-[#161616] to-[#0D0D0D] border border-white/10 p-5 shadow-[0_8px_20px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.15)] flex flex-col justify-between space-y-3 group transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-mono uppercase tracking-wider text-[#AAAAAA]">
+                    {card.tag}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPickerTarget({ type: 'card', id: card.id, title: card.title });
+                        setIsMediaPickerOpen(true);
+                      }}
+                      title="Pick photo from gallery"
+                      className="p-1 rounded-lg bg-white/5 hover:bg-white/15 border border-white/10 text-[#888888] hover:text-white transition-colors"
+                    >
+                      <ImageIcon className="h-3 w-3" />
+                    </button>
+                    <Heart className="h-4 w-4 text-white/50 group-hover:text-white transition-colors" />
+                  </div>
+                </div>
 
-              <div>
-                <h3 className="font-serif text-lg text-white font-normal group-hover:underline">
-                  {card.title}
-                </h3>
-                <p className="font-serif italic text-xs text-[#888888] mt-1 line-clamp-1">
-                  &ldquo;{card.quote}&rdquo;
-                </p>
-                <p className="text-xs text-[#B0B0B0] mt-2 line-clamp-2 font-light leading-relaxed">
-                  {card.preview}
-                </p>
-              </div>
+                {/* Real Photograph from Gallery */}
+                {photo && (
+                  <div className="relative aspect-[16/9] w-full rounded-xl overflow-hidden bg-black/60 border border-white/10 shadow-inner group/photo">
+                    <img
+                      src={photo}
+                      alt={card.title}
+                      className="h-full w-full object-cover group-hover/photo:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+                    <span className="absolute bottom-2 left-2 text-[9px] font-mono text-white/80 bg-black/60 px-2 py-0.5 rounded-md backdrop-blur-xs border border-white/10">
+                      📸 Gallery Photo
+                    </span>
+                  </div>
+                )}
 
-              <div className="text-[11px] font-mono text-white/60 flex items-center gap-1 group-hover:text-white pt-1">
-                <span>Read Full Card</span>
-                <span>→</span>
-              </div>
-            </motion.div>
-          ))}
+                <div>
+                  <h3 className="font-serif text-lg text-white font-normal group-hover:underline">
+                    {card.title}
+                  </h3>
+                  <p className="font-serif italic text-xs text-[#888888] mt-1 line-clamp-1">
+                    &ldquo;{card.quote}&rdquo;
+                  </p>
+                  <p className="text-xs text-[#B0B0B0] mt-2 line-clamp-2 font-light leading-relaxed">
+                    {card.preview}
+                  </p>
+                </div>
+
+                <div className="text-[11px] font-mono text-white/60 flex items-center justify-between pt-1 border-t border-white/5">
+                  <span className="flex items-center gap-1 group-hover:text-white">
+                    <span>Read Full Card</span>
+                    <span>→</span>
+                  </span>
+                  <span className="text-[10px] text-[#777777]">Tap to open</span>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
 
@@ -590,35 +707,56 @@ export function BirthdayCelebrationHome() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {SURPRISES.map(item => (
-            <motion.div
-              key={item.id}
-              whileHover={{ y: -4, scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => handleOpenSurprise(item)}
-              className="cursor-pointer rounded-2xl bg-[#141414] border border-white/10 p-5 shadow-lg flex flex-col items-center text-center space-y-3 group transition-all relative overflow-hidden"
-            >
-              <div className="h-14 w-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-2xl shadow-inner group-hover:scale-110 transition-transform">
-                {item.icon}
-              </div>
+          {SURPRISES.map((item, idx) => {
+            const photo = getSurprisePhoto(item.id, idx);
+            return (
+              <motion.div
+                key={item.id}
+                whileHover={{ y: -4, scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => handleOpenSurprise(item)}
+                className="cursor-pointer rounded-2xl bg-[#141414] border border-white/10 p-4 shadow-lg flex flex-col items-center text-center space-y-3 group transition-all relative overflow-hidden"
+              >
+                {/* Gallery Photo Frame for Surprise */}
+                {photo ? (
+                  <div className="relative aspect-[16/10] w-full rounded-xl overflow-hidden bg-black/60 border border-white/10 shadow-inner group/surp">
+                    <img
+                      src={photo}
+                      alt={item.title}
+                      className="h-full w-full object-cover group-hover/surp:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                    <div className="absolute top-2 right-2 h-7 w-7 rounded-lg bg-black/75 border border-white/20 flex items-center justify-center text-sm shadow-md">
+                      {item.icon}
+                    </div>
+                    <span className="absolute bottom-1.5 left-2 text-[9px] font-mono text-white/80 bg-black/60 px-1.5 py-0.5 rounded backdrop-blur-xs border border-white/10">
+                      Surprise Gift
+                    </span>
+                  </div>
+                ) : (
+                  <div className="h-14 w-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-2xl shadow-inner group-hover:scale-110 transition-transform">
+                    {item.icon}
+                  </div>
+                )}
 
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-[#888888]">
-                  {item.badge}
-                </span>
-                <h4 className="font-serif text-sm font-medium text-white mt-0.5">
-                  {item.title}
-                </h4>
-                <p className="text-[11px] text-[#888888] font-light mt-1">
-                  {item.subtitle}
-                </p>
-              </div>
+                <div className="w-full">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-[#888888]">
+                    {item.badge}
+                  </span>
+                  <h4 className="font-serif text-sm font-medium text-white mt-0.5 line-clamp-1">
+                    {item.title}
+                  </h4>
+                  <p className="text-[11px] text-[#888888] font-light mt-1 line-clamp-1">
+                    {item.subtitle}
+                  </p>
+                </div>
 
-              <button className="px-3 py-1 rounded-xl bg-white/10 border border-white/15 text-[11px] font-medium text-white group-hover:bg-white group-hover:text-black transition-all">
-                Unwrap Box ✨
-              </button>
-            </motion.div>
-          ))}
+                <button className="w-full py-1.5 rounded-xl bg-white/10 border border-white/15 text-[11px] font-medium text-white group-hover:bg-white group-hover:text-black transition-all">
+                  Unwrap Box ✨
+                </button>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
 
@@ -772,12 +910,25 @@ export function BirthdayCelebrationHome() {
             </div>
           </div>
 
-          {/* Any custom uploaded scrapbook photos of Ray */}
-          {customScrapbookPhotos.map((photo) => (
-            <div
-              key={photo.id}
-              className="relative rounded-2xl bg-[#141414] border border-white/15 p-5 shadow-2xl space-y-4 group transition-all hover:border-white/30"
-            >
+          {/* Effective scrapbook photos (custom or automatically sourced from media library) */}
+          {(() => {
+            const effectiveScrapbookPhotos: ScrapbookItem[] = customScrapbookPhotos.length > 0
+              ? customScrapbookPhotos
+              : galleryAssets.map((asset, i) => ({
+                  id: `sb_auto_${asset.id || i}`,
+                  url: asset.url,
+                  title: asset.title || `Ray — Keepsake Photo ${i + 1}`,
+                  note: asset.caption || asset.description || 'A treasured captured photograph of Ray saved in our media library.',
+                  tag: 'Gallery Photo',
+                  date: new Date(asset.createdAt || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                  rotation: i % 2 === 0 ? 'rotate-[1.5deg]' : 'rotate-[-1.5deg]',
+                }));
+
+            return effectiveScrapbookPhotos.map((photo) => (
+              <div
+                key={photo.id}
+                className="relative rounded-2xl bg-[#141414] border border-white/15 p-5 shadow-2xl space-y-4 group transition-all hover:border-white/30"
+              >
               {/* Tape Sticker */}
               <div className={`absolute -top-3 left-8 px-3.5 py-0.5 rounded-sm bg-white/15 border border-white/20 text-[9px] font-mono uppercase tracking-wider text-white ${photo.rotation || 'rotate-[1deg]'} shadow-sm backdrop-blur-xs`}>
                 {photo.tag}
@@ -978,27 +1129,73 @@ export function BirthdayCelebrationHome() {
         onClose={() => setActiveCard(null)}
         title={activeCard?.title}
       >
-        {activeCard && (
-          <div className="space-y-4 p-2 text-white">
-            <span className="px-2.5 py-1 rounded-full bg-white/10 text-[10px] font-mono uppercase tracking-wider text-[#CCCCCC]">
-              {activeCard.tag}
-            </span>
-            <blockquote className="font-serif italic text-sm text-[#AAAAAA] border-l-2 border-white/30 pl-3">
-              &ldquo;{activeCard.quote}&rdquo;
-            </blockquote>
-            <p className="font-serif text-sm sm:text-base leading-relaxed text-[#E5E5E5] font-light whitespace-pre-line pt-2">
-              {activeCard.fullText}
-            </p>
-            <div className="pt-4 border-t border-white/10 flex justify-end">
-              <button
-                onClick={() => setActiveCard(null)}
-                className="px-4 py-2 rounded-xl bg-white text-black text-xs font-medium hover:bg-[#E0E0E0] transition-colors"
-              >
-                Close Card ❤️
-              </button>
+        {activeCard && (() => {
+          const cardIdx = BIRTHDAY_CARDS.findIndex(c => c.id === activeCard.id);
+          const photo = getCardPhoto(activeCard.id, cardIdx >= 0 ? cardIdx : 0);
+
+          return (
+            <div className="space-y-4 p-2 text-white">
+              {/* High-res Photo Header */}
+              {photo && (
+                <div
+                  onClick={() => openMediaViewer([photo], 0, { title: activeCard.title, description: activeCard.quote })}
+                  className="relative aspect-[16/9] sm:aspect-[2/1] w-full rounded-2xl overflow-hidden bg-black/80 border border-white/15 cursor-pointer shadow-lg group/modalImg"
+                >
+                  <img
+                    src={photo}
+                    alt={activeCard.title}
+                    className="h-full w-full object-cover group-hover/modalImg:scale-103 transition-transform duration-300"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[11px] font-mono text-white">
+                    <span className="bg-black/60 px-2.5 py-1 rounded-lg backdrop-blur-sm border border-white/10">
+                      📸 Real Photograph • Tap to Zoom
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPickerTarget({ type: 'card', id: activeCard.id, title: activeCard.title });
+                        setIsMediaPickerOpen(true);
+                      }}
+                      className="bg-white/15 hover:bg-white/25 px-2.5 py-1 rounded-lg backdrop-blur-sm border border-white/20 text-white flex items-center gap-1 transition-all"
+                    >
+                      <ImageIcon className="h-3 w-3" />
+                      <span>Change Photo</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <span className="px-2.5 py-1 rounded-full bg-white/10 text-[10px] font-mono uppercase tracking-wider text-[#CCCCCC]">
+                {activeCard.tag}
+              </span>
+              <blockquote className="font-serif italic text-sm text-[#AAAAAA] border-l-2 border-white/30 pl-3">
+                &ldquo;{activeCard.quote}&rdquo;
+              </blockquote>
+              <p className="font-serif text-sm sm:text-base leading-relaxed text-[#E5E5E5] font-light whitespace-pre-line pt-2">
+                {activeCard.fullText}
+              </p>
+              <div className="pt-4 border-t border-white/10 flex justify-between items-center">
+                <button
+                  onClick={() => {
+                    setPickerTarget({ type: 'card', id: activeCard.id, title: activeCard.title });
+                    setIsMediaPickerOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/15 text-xs text-[#CCCCCC] hover:text-white hover:bg-white/15 flex items-center gap-1.5 transition-all"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  <span>Pick from Gallery</span>
+                </button>
+                <button
+                  onClick={() => setActiveCard(null)}
+                  className="px-4 py-2 rounded-xl bg-white text-black text-xs font-medium hover:bg-[#E0E0E0] transition-colors"
+                >
+                  Close Card ❤️
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </Modal>
 
       {/* MODAL 2: SURPRISE UNWRAP */}
@@ -1007,26 +1204,72 @@ export function BirthdayCelebrationHome() {
         onClose={() => setActiveSurprise(null)}
         title={activeSurprise?.revealTitle}
       >
-        {activeSurprise && (
-          <div className="space-y-4 p-2 text-center text-white">
-            <div className="h-16 w-16 rounded-2xl bg-white/5 border border-white/15 flex items-center justify-center text-3xl mx-auto shadow-inner animate-bounce">
-              {activeSurprise.icon}
-            </div>
+        {activeSurprise && (() => {
+          const surpIdx = SURPRISES.findIndex(s => s.id === activeSurprise.id);
+          const photo = getSurprisePhoto(activeSurprise.id, surpIdx >= 0 ? surpIdx : 0);
 
-            <p className="font-serif text-sm sm:text-base text-[#D0D0D0] leading-relaxed font-light px-2">
-              {activeSurprise.revealContent}
-            </p>
+          return (
+            <div className="space-y-4 p-2 text-center text-white">
+              {/* High-res Surprise Photo Header */}
+              {photo && (
+                <div
+                  onClick={() => openMediaViewer([photo], 0, { title: activeSurprise.revealTitle, description: activeSurprise.revealContent })}
+                  className="relative aspect-[16/9] w-full rounded-2xl overflow-hidden bg-black/80 border border-white/15 cursor-pointer shadow-lg group/surpModal"
+                >
+                  <img
+                    src={photo}
+                    alt={activeSurprise.title}
+                    className="h-full w-full object-cover group-hover/surpModal:scale-103 transition-transform duration-300"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[11px] font-mono text-white">
+                    <span className="bg-black/60 px-2.5 py-1 rounded-lg backdrop-blur-sm border border-white/10">
+                      📸 Real Photograph • Tap to Zoom
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPickerTarget({ type: 'surprise', id: activeSurprise.id, title: activeSurprise.title });
+                        setIsMediaPickerOpen(true);
+                      }}
+                      className="bg-white/15 hover:bg-white/25 px-2.5 py-1 rounded-lg backdrop-blur-sm border border-white/20 text-white flex items-center gap-1 transition-all"
+                    >
+                      <ImageIcon className="h-3 w-3" />
+                      <span>Change Photo</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
-            <div className="pt-4 flex items-center justify-center gap-2">
-              <button
-                onClick={() => setActiveSurprise(null)}
-                className="px-6 py-2 rounded-xl bg-white text-black text-xs font-medium hover:bg-[#E0E0E0] shadow-md transition-all"
-              >
-                Cherish Surprise ✨
-              </button>
+              <div className="h-14 w-14 rounded-2xl bg-white/5 border border-white/15 flex items-center justify-center text-2xl mx-auto shadow-inner animate-bounce">
+                {activeSurprise.icon}
+              </div>
+
+              <p className="font-serif text-sm sm:text-base text-[#D0D0D0] leading-relaxed font-light px-2">
+                {activeSurprise.revealContent}
+              </p>
+
+              <div className="pt-4 border-t border-white/10 flex items-center justify-between gap-2">
+                <button
+                  onClick={() => {
+                    setPickerTarget({ type: 'surprise', id: activeSurprise.id, title: activeSurprise.title });
+                    setIsMediaPickerOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/15 text-xs text-[#CCCCCC] hover:text-white hover:bg-white/15 flex items-center gap-1.5 transition-all"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  <span>Pick from Gallery</span>
+                </button>
+                <button
+                  onClick={() => setActiveSurprise(null)}
+                  className="px-6 py-2 rounded-xl bg-white text-black text-xs font-medium hover:bg-[#E0E0E0] shadow-md transition-all"
+                >
+                  Cherish Surprise ✨
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </Modal>
 
       {/* MODAL 3: MANAGE / ADD MEDIA FOR DESH */}
@@ -1103,13 +1346,26 @@ export function BirthdayCelebrationHome() {
       {/* Media Picker Modal for selecting uploaded photos of Ray */}
       <MediaPickerModal
         isOpen={isMediaPickerOpen}
-        onClose={() => setIsMediaPickerOpen(false)}
+        onClose={() => {
+          setIsMediaPickerOpen(false);
+          setPickerTarget(null);
+        }}
         onSelect={handleSelectFromLibrary}
-        multiple={true}
-        title="Add Ray's Photographs to Scrapbook"
-        description="Select authentic photographs of Ray from our centralized media library to feature in her keepsake scrapbook."
+        multiple={pickerTarget?.type === 'scrapbook' || !pickerTarget}
+        title={
+          pickerTarget?.type === 'card'
+            ? `Choose Photo for "${pickerTarget.title}"`
+            : pickerTarget?.type === 'surprise'
+            ? `Choose Photo for "${pickerTarget.title}"`
+            : "Add Ray's Photographs to Scrapbook"
+        }
+        description={
+          pickerTarget?.type === 'card' || pickerTarget?.type === 'surprise'
+            ? "Pick any real uploaded photograph from your sanctuary media library to display on this card."
+            : "Select authentic photographs of Ray from our centralized media library to feature in her keepsake scrapbook."
+        }
         allowedMediaType="image"
-        defaultCategory="birthday"
+        defaultCategory="all"
       />
     </div>
   );
