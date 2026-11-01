@@ -8,9 +8,10 @@ import confetti from 'canvas-confetti';
 interface BirthdayEntranceProps {
   onEnter: () => void;
   celebrantName?: string;
+  celebrantPhoto?: string;
 }
 
-export function BirthdayEntrance({ onEnter, celebrantName = 'Rey' }: BirthdayEntranceProps) {
+export function BirthdayEntrance({ onEnter, celebrantName = 'Ray', celebrantPhoto }: BirthdayEntranceProps) {
   // Sequence stages:
   // 1: Dark screen with subtle glowing particles
   // 2: Ray heart logo appears in center with pulsing glow
@@ -139,7 +140,7 @@ export function BirthdayEntrance({ onEnter, celebrantName = 'Rey' }: BirthdayEnt
 
       {/* Main Content Container */}
       <div className="relative z-10 flex flex-col items-center max-w-xl mx-auto space-y-6">
-        {/* STAGE 2+: Centered Ray Heart Logo */}
+        {/* STAGE 2+: Centered Portrait of Ray in Glowing Circular Frame */}
         <AnimatePresence>
           {stage >= 2 && (
             <motion.div
@@ -149,10 +150,24 @@ export function BirthdayEntrance({ onEnter, celebrantName = 'Rey' }: BirthdayEnt
               className="relative"
             >
               {/* Outer halo */}
-              <div className="absolute -inset-4 rounded-3xl bg-white/10 blur-xl animate-pulse" />
+              <div className="absolute -inset-4 rounded-full bg-gradient-to-tr from-white/20 via-rose-500/10 to-white/10 blur-xl animate-pulse" />
 
-              <div className="relative flex h-24 w-24 sm:h-28 sm:w-28 items-center justify-center rounded-3xl bg-gradient-to-b from-[#222222] via-[#141414] to-[#0A0A0A] border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.9),inset_0_1px_2px_rgba(255,255,255,0.4)]">
-                <Heart className="h-12 w-12 sm:h-14 sm:w-14 text-white fill-white drop-shadow-[0_0_16px_rgba(255,255,255,0.7)] animate-pulse" />
+              <div className="relative flex h-28 w-28 sm:h-36 sm:w-36 items-center justify-center rounded-full bg-gradient-to-b from-[#333333] via-[#1a1a1a] to-[#0A0A0A] p-1.5 border border-white/30 shadow-[0_20px_60px_rgba(0,0,0,0.9),inset_0_1px_2px_rgba(255,255,255,0.6)]">
+                {celebrantPhoto ? (
+                  <img
+                    src={celebrantPhoto}
+                    alt={celebrantName}
+                    className="h-full w-full rounded-full object-cover shadow-inner"
+                  />
+                ) : (
+                  <div className="h-full w-full rounded-full bg-[#161616] flex items-center justify-center">
+                    <Heart className="h-12 w-12 text-white fill-white drop-shadow-[0_0_16px_rgba(255,255,255,0.7)] animate-pulse" />
+                  </div>
+                )}
+                {/* Floating mini heart badge */}
+                <div className="absolute -bottom-1 -right-1 h-9 w-9 rounded-full bg-black/90 border border-white/30 flex items-center justify-center shadow-lg">
+                  <Heart className="h-4 w-4 fill-white text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
+                </div>
               </div>
             </motion.div>
           )}

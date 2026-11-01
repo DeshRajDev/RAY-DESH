@@ -19,12 +19,22 @@ export const ACCOUNTS = {
     defaultPassword: 'Love..',
     birthday: '2004-05-15T00:00:00.000Z',
   },
+  ray: {
+    id: 'user_2',
+    email: 'ray@couple.local',
+    phoneNumber: '9015006850',
+    username: 'ray',
+    name: 'Ray',
+    role: 'partner2' as const,
+    defaultPassword: 'Love..',
+    birthday: '2005-11-01T00:00:00.000Z',
+  },
   rey: {
     id: 'user_2',
-    email: 'rey@couple.local',
+    email: 'ray@couple.local',
     phoneNumber: '9015006850',
-    username: 'rey',
-    name: 'Rey',
+    username: 'ray',
+    name: 'Ray',
     role: 'partner2' as const,
     defaultPassword: 'Love..',
     birthday: '2005-11-01T00:00:00.000Z',
@@ -147,30 +157,24 @@ class AuthService {
 
       this.isSessionActive = true;
       const mappedRole = backendUser.role === 'partner1' ? 'user_1' : 'user_2';
+      const partnerRole = mappedRole === 'user_1' ? 'user_2' : 'user_1';
       this.activeUserId = mappedRole;
 
-      // Update in-memory user
-      const userObj: User = {
-        id: mappedRole,
-        _id: backendUser.id || backendUser._id,
-        mongoId: backendUser.id || backendUser._id,
-        name: backendUser.name,
-        nickname: backendUser.nickname || '',
-        email: backendUser.email,
-        phoneNumber: backendUser.phoneNumber,
-        avatar: backendUser.avatar || (mappedRole === 'user_1' ? currentUser.avatar : partnerUser.avatar),
-        bio: backendUser.bio || '',
-        birthday: backendUser.birthday,
-        favoriteSong: backendUser.favoriteSong,
-        favoritePlace: backendUser.favoritePlace,
-        favoriteQuote: backendUser.favoriteQuote,
-        favoriteColor: backendUser.favoriteColor,
-        statusMessage: backendUser.statusMessage,
-        isOnline: true,
-        role: backendUser.role,
-      };
-
+      // Update in-memory current user
+      const userObj = this.mapBackendUser(backendUser, mappedRole);
       this.users[mappedRole] = userObj;
+
+      // Also synchronize partner profile from backend profiles endpoint
+      try {
+        const profRes = await api.get<{ success: boolean; data: { me: any; partner: any } }>('/users/profiles');
+        if (profRes && profRes.success && profRes.data) {
+          const { me: pMe, partner: pPartner } = profRes.data;
+          if (pMe) this.users[mappedRole] = this.mapBackendUser(pMe, mappedRole);
+          if (pPartner) this.users[partnerRole] = this.mapBackendUser(pPartner, partnerRole);
+        }
+      } catch {
+        // fallback
+      }
 
       if (typeof window !== 'undefined') {
         localStorage.setItem(SESSION_KEY, 'true');
@@ -184,8 +188,8 @@ class AuthService {
             _id: backendCouple.id || backendCouple._id,
             partner1Id,
             partner2Id,
-            partner1: mappedRole === 'user_1' ? userObj : this.getPartnerUser(),
-            partner2: mappedRole === 'user_2' ? userObj : this.getPartnerUser(),
+            partner1: mappedRole === 'user_1' ? this.users.user_1 : this.users.user_2,
+            partner2: mappedRole === 'user_2' ? this.users.user_2 : this.users.user_1,
             anniversaryDate: backendCouple.anniversaryDate,
             relationshipStartDate: backendCouple.relationshipStartDate,
             customTitle: backendCouple.customTitle || 'Ray',
@@ -198,7 +202,7 @@ class AuthService {
       }
 
       this.notify();
-      return { success: true, data: userObj };
+      return { success: true, data: this.users[mappedRole] };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Invalid phone number/email or password.';
       return {
@@ -211,6 +215,32 @@ class AuthService {
     }
   }
 
+  private mapBackendUser(raw: any, roleKey: 'user_1' | 'user_2'): User {
+    const defaultAvatar = roleKey === 'user_1' ? currentUser.avatar : partnerUser.avatar;
+    let name = raw.name || (roleKey === 'user_1' ? 'Desh' : 'Ray');
+    if (name === 'Rey') name = 'Ray';
+
+    return {
+      id: roleKey,
+      _id: raw.id || raw._id,
+      mongoId: raw.id || raw._id,
+      name,
+      nickname: raw.nickname || '',
+      email: raw.email,
+      phoneNumber: raw.phoneNumber,
+      avatar: raw.avatar || defaultAvatar,
+      bio: raw.bio || '',
+      birthday: raw.birthday || (roleKey === 'user_1' ? '2004-05-15T00:00:00.000Z' : '2005-11-01T00:00:00.000Z'),
+      favoriteSong: raw.favoriteSong,
+      favoritePlace: raw.favoritePlace,
+      favoriteQuote: raw.favoriteQuote,
+      favoriteColor: raw.favoriteColor,
+      statusMessage: raw.statusMessage,
+      isOnline: Boolean(raw.isOnline),
+      role: raw.role || (roleKey === 'user_1' ? 'partner1' : 'partner2'),
+    };
+  }
+
   public async verifySession(): Promise<boolean> {
     const api = ApiClient.getInstance();
     const token = api.getToken();
@@ -220,30 +250,32 @@ class AuthService {
     }
 
     try {
-      const res = await api.get<{ success: boolean; data: { user: any; couple: any } }>('/auth/me');
-      if (res && res.success && res.data?.user) {
-        const backendUser = res.data.user;
+      const [meRes, profilesRes] = await Promise.all([
+        api.get<{ success: boolean; data: { user: any; couple: any } }>('/auth/me'),
+        api.get<{ success: boolean; data: { me: any; partner: any } }>('/users/profiles').catch(() => null),
+      ]);
+
+      if (meRes && meRes.success && meRes.data?.user) {
+        const backendUser = meRes.data.user;
         const mappedRole = backendUser.role === 'partner1' ? 'user_1' : 'user_2';
+        const partnerRole = mappedRole === 'user_1' ? 'user_2' : 'user_1';
         this.activeUserId = mappedRole;
         this.isSessionActive = true;
-        this.users[mappedRole] = {
-          ...this.users[mappedRole],
-          _id: backendUser.id || backendUser._id,
-          mongoId: backendUser.id || backendUser._id,
-          name: backendUser.name,
-          email: backendUser.email,
-          phoneNumber: backendUser.phoneNumber,
-          avatar: backendUser.avatar,
-          bio: backendUser.bio,
-          birthday: backendUser.birthday,
-          favoriteSong: backendUser.favoriteSong,
-          favoritePlace: backendUser.favoritePlace,
-          favoriteQuote: backendUser.favoriteQuote,
-          favoriteColor: backendUser.favoriteColor,
-          statusMessage: backendUser.statusMessage,
-          isOnline: true,
-          role: backendUser.role,
-        };
+
+        this.users[mappedRole] = this.mapBackendUser(backendUser, mappedRole);
+
+        if (profilesRes && profilesRes.success && profilesRes.data) {
+          const { me: pMe, partner: pPartner } = profilesRes.data;
+          if (pMe) this.users[mappedRole] = this.mapBackendUser(pMe, mappedRole);
+          if (pPartner) this.users[partnerRole] = this.mapBackendUser(pPartner, partnerRole);
+        }
+
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(SESSION_KEY, 'true');
+          localStorage.setItem(STORAGE_KEY, mappedRole);
+          localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(this.users));
+        }
+
         this.notify();
         return true;
       }
@@ -267,7 +299,7 @@ class AuthService {
     if (token) return token;
 
     try {
-      const activeAccount = this.activeUserId === 'user_2' ? ACCOUNTS.rey : ACCOUNTS.desh;
+      const activeAccount = this.activeUserId === 'user_2' ? ACCOUNTS.ray : ACCOUNTS.desh;
       const res = await this.loginWithCredentials(activeAccount.phoneNumber, activeAccount.defaultPassword);
       if (res.success) {
         return api.getToken();
@@ -288,21 +320,25 @@ class AuthService {
   }
 
   public async updateUserProfile(userId: string, updates: Partial<User>): Promise<User> {
-    const key = userId as 'user_1' | 'user_2';
-    if (this.users[key]) {
-      this.users[key] = { ...this.users[key], ...updates };
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(this.users));
-      }
-      try {
-        await ApiClient.getInstance().patch('/users/profile', updates);
-      } catch (err) {
-        console.warn('Profile update backend sync error:', err);
-      }
-      this.notify();
-      return this.users[key];
+    // Strictly isolate updates to the current authenticated user!
+    const key = this.activeUserId as 'user_1' | 'user_2';
+    this.users[key] = { ...this.users[key], ...updates };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(this.users));
     }
-    return this.getCurrentUser();
+    try {
+      const res = await ApiClient.getInstance().patch<{ success: boolean; data: any }>('/users/profile', updates);
+      if (res && res.data) {
+        this.users[key] = this.mapBackendUser(res.data, key);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(this.users));
+        }
+      }
+    } catch (err) {
+      console.warn('Profile update backend sync error:', err);
+    }
+    this.notify();
+    return this.users[key];
   }
 
   public logout(): void {
@@ -312,9 +348,19 @@ class AuthService {
       // ignore
     }
     this.isSessionActive = false;
+    this.activeUserId = 'user_1';
+    // Reset in-memory users back to defaults so no data leaks between accounts
+    this.users = {
+      user_1: { ...currentUser },
+      user_2: { ...partnerUser },
+    };
     if (typeof window !== 'undefined') {
       localStorage.removeItem(SESSION_KEY);
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(PROFILES_STORAGE_KEY);
+      localStorage.removeItem('sanctuary_couple_settings_v2');
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('couple_auth_token');
       try {
         ApiClient.getInstance().setToken(null);
       } catch {

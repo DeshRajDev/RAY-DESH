@@ -25,15 +25,19 @@ import {
   Upload,
   Calendar,
   Eye,
-  Lock
+  Lock,
+  Trash2,
+  Image as ImageIcon
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useApp } from '@/stores/app-context';
 import { bucketListService } from '@/services/bucketList.service';
 import { memoryService } from '@/services/memory.service';
 import { birthdayService } from '@/services/birthday.service';
-import { BirthdayData, Memory } from '@/types';
+import { mediaService } from '@/services/media.service';
+import { BirthdayData, Memory, MediaAsset } from '@/types';
 import { Modal } from '@/components/ui/modal';
+import { MediaPickerModal } from '@/components/media/MediaPickerModal';
 
 // Curated Real India Travel Dreams
 interface TravelDream {
@@ -161,7 +165,7 @@ const DREAM_DESTINATIONS: TravelDream[] = [
 const BIRTHDAY_CARDS = [
   {
     id: 'card-1',
-    title: 'To My Beautiful Rey',
+    title: 'To My Beautiful Ray',
     tag: 'From My Heart',
     quote: 'In all the world, there is no heart for me like yours.',
     preview: 'Happy Birthday, bchu. You are the quiet strength and the softest light in my life...',
@@ -246,7 +250,7 @@ const SURPRISES: SurpriseItem[] = [
     subtitle: 'Blessings for peace & health',
     icon: '✨',
     badge: 'Blessings',
-    revealTitle: 'Spiritual Blessings & Prayers for Rey 🙏',
+    revealTitle: 'Spiritual Blessings & Prayers for Ray 🙏',
     revealContent:
       'On this sacred day, I pray to the Almighty for your lifelong health, joy, peace, and unwavering smile. May your spiritual strength guide you, may every prayer you whisper be answered, and may our love remain protected under divine grace forever.',
   },
@@ -264,12 +268,113 @@ export function BirthdayCelebrationHome() {
   const [selectedDreamCategory, setSelectedDreamCategory] = useState<string>('All');
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
 
+  // Ray's photo resolution (works whether Desh or Ray is viewing)
+  const rayPhoto = partner?.name === 'Desh' ? user?.avatar : (partner?.avatar || user?.avatar);
+
   // New Memory / Wish upload state for Desh (Planner)
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadCaption, setUploadCaption] = useState('');
   const [uploadMediaUrl, setUploadMediaUrl] = useState('');
   const [uploadMediaType, setUploadMediaType] = useState<'photo' | 'video'>('photo');
   const [isSubmittingMedia, setIsSubmittingMedia] = useState(false);
+
+  // Scrapbook Photos State
+  interface ScrapbookItem {
+    id: string;
+    url: string;
+    title: string;
+    note: string;
+    tag: string;
+    date: string;
+    rotation?: string;
+  }
+
+  const [customScrapbookPhotos, setCustomScrapbookPhotos] = useState<ScrapbookItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ray_birthday_scrapbook_photos');
+        if (stored) return JSON.parse(stored);
+      } catch {
+        // ignore
+      }
+    }
+    return [];
+  });
+  const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
+  const [isUploadingScrapbook, setIsUploadingScrapbook] = useState(false);
+  const scrapbookFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const saveCustomScrapbookPhotos = (items: ScrapbookItem[]) => {
+    setCustomScrapbookPhotos(items);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('ray_birthday_scrapbook_photos', JSON.stringify(items));
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const handleUploadScrapbookFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingScrapbook(true);
+    try {
+      const uploadObj = mediaService.uploadFile(file, {
+        categories: ['birthday', 'scrapbook'],
+        title: `${partner?.name || 'Ray'} Birthday Scrapbook Photo`,
+      });
+      const res = await uploadObj.promise;
+      if (res.success && res.data?.url) {
+        const newItem: ScrapbookItem = {
+          id: `sb_${Date.now()}`,
+          url: res.data.url,
+          title: file.name.replace(/\.[^/.]+$/, ''),
+          note: 'A precious captured photograph of Ray added to our keepsake scrapbook.',
+          tag: 'Keepsake Photo',
+          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          rotation: Math.random() > 0.5 ? 'rotate-[1.5deg]' : 'rotate-[-1.5deg]',
+        };
+        saveCustomScrapbookPhotos([newItem, ...customScrapbookPhotos]);
+        triggerHeartEffect();
+        confetti({
+          particleCount: 50,
+          spread: 60,
+          origin: { y: 0.6 },
+          colors: ['#ffffff', '#cccccc'],
+        });
+      } else {
+        alert('Failed to upload scrapbook photo to Cloudinary');
+      }
+    } catch (err: any) {
+      alert(`Scrapbook photo upload error: ${err?.message || 'Upload failed'}`);
+    } finally {
+      setIsUploadingScrapbook(false);
+      if (scrapbookFileInputRef.current) scrapbookFileInputRef.current.value = '';
+    }
+  };
+
+  const handleSelectFromLibrary = (selectedAssets: MediaAsset[]) => {
+    const newItems: ScrapbookItem[] = selectedAssets.map((asset, i) => ({
+      id: `sb_asset_${asset.id || Date.now()}_${i}`,
+      url: asset.url,
+      title: asset.title || 'Ray Photograph',
+      note: asset.description || asset.caption || 'A treasured photograph of Ray from our sanctuary media library.',
+      tag: 'Sanctuary Photo',
+      date: new Date(asset.createdAt || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      rotation: i % 2 === 0 ? 'rotate-[2deg]' : 'rotate-[-2deg]',
+    }));
+    saveCustomScrapbookPhotos([...newItems, ...customScrapbookPhotos]);
+    setIsMediaPickerOpen(false);
+    triggerHeartEffect();
+  };
+
+  const handleRemoveScrapbookPhoto = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = customScrapbookPhotos.filter(item => item.id !== id);
+    saveCustomScrapbookPhotos(updated);
+  };
 
   useEffect(() => {
     birthdayService.getBirthdayData().then(res => setBData(res.data ?? null));
@@ -365,9 +470,25 @@ export function BirthdayCelebrationHome() {
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 h-64 w-96 rounded-full bg-white/[0.04] blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col items-center text-center space-y-4">
+          {/* Real Photograph of Ray in Hero Banner */}
+          {rayPhoto && (
+            <div className="relative group my-1">
+              <div className="absolute -inset-2 rounded-full bg-gradient-to-tr from-white/20 via-rose-500/10 to-white/5 blur-lg" />
+              <img
+                src={rayPhoto}
+                alt="Ray"
+                onClick={() => openMediaViewer([rayPhoto], 0, { title: 'Happy Birthday Ray ❤️', description: 'Our beautiful queen on her special day.' })}
+                className="relative h-28 w-28 sm:h-32 sm:w-32 rounded-full object-cover border-2 border-white/30 shadow-[0_10px_30px_rgba(0,0,0,0.8)] cursor-pointer group-hover:scale-105 transition-transform"
+              />
+              <div className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-black/90 border border-white/20 flex items-center justify-center shadow-md">
+                <Heart className="h-4 w-4 fill-white text-white" />
+              </div>
+            </div>
+          )}
+
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-mono uppercase tracking-[0.2em] text-[#AAAAAA]">
             <Cake className="h-3.5 w-3.5 text-white" />
-            <span>Today is All About Rey • November 1</span>
+            <span>Today is All About Ray • November 1</span>
             <Sparkles className="h-3.5 w-3.5 text-white" />
           </div>
 
@@ -563,47 +684,154 @@ export function BirthdayCelebrationHome() {
         )}
       </div>
 
-      {/* 5. SECTION D: DIGITAL SCRAPBOOK */}
-      <div className="space-y-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-mono uppercase text-[#888888]">
-            <BookOpen className="h-3.5 w-3.5 text-white" />
-            <span>Section D</span>
+      {/* 5. SECTION D: DIGITAL HANDMADE SCRAPBOOK WITH RAY'S REAL PHOTOGRAPHS */}
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-mono uppercase text-[#888888]">
+              <BookOpen className="h-3.5 w-3.5 text-white" />
+              <span>Section D</span>
+            </div>
+            <h2 className="font-serif text-2xl font-light text-white">Digital Handmade Scrapbook</h2>
+            <p className="text-xs text-[#888888] font-light">
+              A personal collection of Ray&apos;s real photographs, handwritten notes, and polaroid keepsakes.
+            </p>
           </div>
-          <h2 className="font-serif text-2xl font-light text-white">Digital Handmade Scrapbook</h2>
-          <p className="text-xs text-[#888888] font-light">
-            Crafted like a handmade scrapbook of love, personal notes, and sacred promises.
-          </p>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              ref={scrapbookFileInputRef}
+              onChange={handleUploadScrapbookFile}
+              accept="image/*"
+              className="hidden"
+            />
+            <button
+              onClick={() => scrapbookFileInputRef.current?.click()}
+              disabled={isUploadingScrapbook}
+              className="px-3.5 py-1.5 rounded-xl bg-white text-black hover:bg-[#EAEAEA] text-xs font-medium flex items-center gap-1.5 transition-all shadow-md"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              <span>{isUploadingScrapbook ? 'Uploading...' : 'Upload Scrapbook Photo'}</span>
+            </button>
+            <button
+              onClick={() => setIsMediaPickerOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs text-white flex items-center gap-1.5 transition-all"
+            >
+              <ImageIcon className="h-3.5 w-3.5" />
+              <span>Pick from Library</span>
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Scrapbook Page 1 */}
-          <div className="relative rounded-2xl bg-[#141414] border border-white/15 p-6 shadow-xl space-y-4">
-            <div className="absolute -top-3 left-6 px-3 py-0.5 rounded-md bg-white/10 border border-white/20 text-[9px] font-mono uppercase tracking-wider text-white rotate-[-2deg]">
+        {/* Polaroid Scrapbook Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Featured Polaroid Card 01: Ray's Portrait */}
+          <div className="relative rounded-2xl bg-[#141414] border border-white/15 p-5 shadow-2xl space-y-4 group transition-all hover:border-white/30">
+            {/* Scrapbook Tape Sticker at top */}
+            <div className="absolute -top-3 left-8 px-3.5 py-0.5 rounded-sm bg-white/15 border border-white/20 text-[9px] font-mono uppercase tracking-wider text-white rotate-[-2deg] shadow-sm backdrop-blur-xs">
               Note 01 • Her Grace
             </div>
-            <div className="pt-2">
-              <span className="text-xl">🌸</span>
-              <h4 className="font-serif text-base text-white mt-1">The Girl in the Suit</h4>
-              <p className="font-serif italic text-xs text-[#B0B0B0] leading-relaxed mt-2 font-light">
+
+            {/* Polaroid Photo Frame */}
+            <div
+              onClick={() => rayPhoto && openMediaViewer([rayPhoto], 0, { title: 'Ray — The Girl in the Suit', description: 'Effortless dignity and quiet grace.' })}
+              className="relative aspect-[4/5] rounded-xl overflow-hidden bg-black/60 border border-white/10 cursor-pointer shadow-inner group/img"
+            >
+              {rayPhoto ? (
+                <img
+                  src={rayPhoto}
+                  alt="Ray"
+                  className="h-full w-full object-cover group-hover/img:scale-104 transition-transform duration-300"
+                />
+              ) : (
+                <div className="h-full w-full flex items-center justify-center text-white/40">
+                  <Heart className="h-12 w-12" />
+                </div>
+              )}
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-white text-xs gap-1 transition-opacity backdrop-blur-2xs">
+                <Maximize2 className="h-4 w-4" />
+                <span>View Full Photo</span>
+              </div>
+            </div>
+
+            {/* Handwritten note caption */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-base">🌸</span>
+                <h4 className="font-serif text-base text-white">The Girl in the Suit</h4>
+              </div>
+              <p className="font-serif italic text-xs text-[#B8B8B8] leading-relaxed font-light">
                 &ldquo;You usually love wearing suits, and there is a quiet, effortless dignity about how you carry yourself. Simple, natural, and never needing to be loud to be extraordinary.&rdquo;
               </p>
             </div>
+
             <div className="border-t border-white/10 pt-3 flex items-center justify-between text-[10px] font-mono text-[#777777]">
-              <span>Handwritten for Rey</span>
+              <span>Handwritten for Ray</span>
               <span>Nov 1, 2026</span>
             </div>
           </div>
 
-          {/* Scrapbook Page 2 */}
-          <div className="relative rounded-2xl bg-[#141414] border border-white/15 p-6 shadow-xl space-y-4">
-            <div className="absolute -top-3 left-6 px-3 py-0.5 rounded-md bg-white/10 border border-white/20 text-[9px] font-mono uppercase tracking-wider text-white rotate-[1deg]">
+          {/* Any custom uploaded scrapbook photos of Ray */}
+          {customScrapbookPhotos.map((photo) => (
+            <div
+              key={photo.id}
+              className="relative rounded-2xl bg-[#141414] border border-white/15 p-5 shadow-2xl space-y-4 group transition-all hover:border-white/30"
+            >
+              {/* Tape Sticker */}
+              <div className={`absolute -top-3 left-8 px-3.5 py-0.5 rounded-sm bg-white/15 border border-white/20 text-[9px] font-mono uppercase tracking-wider text-white ${photo.rotation || 'rotate-[1deg]'} shadow-sm backdrop-blur-xs`}>
+                {photo.tag}
+              </div>
+
+              {/* Delete button on card hover */}
+              <button
+                onClick={(e) => handleRemoveScrapbookPhoto(photo.id, e)}
+                title="Remove from scrapbook"
+                className="absolute top-3 right-3 p-1.5 rounded-full bg-black/75 text-[#888888] hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+
+              {/* Photo Frame */}
+              <div
+                onClick={() => openMediaViewer([photo.url], 0, { title: photo.title, description: photo.note })}
+                className="relative aspect-[4/5] rounded-xl overflow-hidden bg-black/60 border border-white/10 cursor-pointer shadow-inner group/img"
+              >
+                <img
+                  src={photo.url}
+                  alt={photo.title}
+                  className="h-full w-full object-cover group-hover/img:scale-104 transition-transform duration-300"
+                />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-white text-xs gap-1 transition-opacity backdrop-blur-2xs">
+                  <Maximize2 className="h-4 w-4" />
+                  <span>View Full Photo</span>
+                </div>
+              </div>
+
+              {/* Caption */}
+              <div className="space-y-1.5 pt-1">
+                <h4 className="font-serif text-base text-white">{photo.title}</h4>
+                <p className="font-serif italic text-xs text-[#B8B8B8] leading-relaxed font-light">
+                  &ldquo;{photo.note}&rdquo;
+                </p>
+              </div>
+
+              <div className="border-t border-white/10 pt-3 flex items-center justify-between text-[10px] font-mono text-[#777777]">
+                <span>Sanctuary Keepsake</span>
+                <span>{photo.date || 'Captured Moment'}</span>
+              </div>
+            </div>
+          ))}
+
+          {/* Devotion Card: Note 02 */}
+          <div className="relative rounded-2xl bg-[#141414] border border-white/15 p-6 shadow-2xl flex flex-col justify-between space-y-4">
+            <div className="absolute -top-3 left-6 px-3 py-0.5 rounded-sm bg-white/10 border border-white/20 text-[9px] font-mono uppercase tracking-wider text-white rotate-[1deg] backdrop-blur-xs">
               Note 02 • Our Bond
             </div>
-            <div className="pt-2">
+            <div className="pt-2 space-y-2">
               <span className="text-xl">❤️</span>
-              <h4 className="font-serif text-base text-white mt-1">Years of Pure Devotion</h4>
-              <p className="font-serif italic text-xs text-[#B0B0B0] leading-relaxed mt-2 font-light">
+              <h4 className="font-serif text-base text-white">Years of Pure Devotion</h4>
+              <p className="font-serif italic text-xs text-[#B0B0B0] leading-relaxed font-light">
                 &ldquo;We haven&apos;t had coffee in the same room yet, but we have shared tears, late night dreams, and pure prayers. Our relationship was built on honesty, respect, and deep commitment.&rdquo;
               </p>
             </div>
@@ -613,21 +841,21 @@ export function BirthdayCelebrationHome() {
             </div>
           </div>
 
-          {/* Scrapbook Page 3 */}
-          <div className="relative rounded-2xl bg-[#141414] border border-white/15 p-6 shadow-xl space-y-4">
-            <div className="absolute -top-3 left-6 px-3 py-0.5 rounded-md bg-white/10 border border-white/20 text-[9px] font-mono uppercase tracking-wider text-white rotate-[-1deg]">
+          {/* Reserved for the Day We Meet Card: Note 03 */}
+          <div className="relative rounded-2xl bg-[#141414] border border-white/15 p-6 shadow-2xl flex flex-col justify-between space-y-4">
+            <div className="absolute -top-3 left-6 px-3 py-0.5 rounded-sm bg-white/10 border border-white/20 text-[9px] font-mono uppercase tracking-wider text-white rotate-[-1deg] backdrop-blur-xs">
               Note 03 • Reserved Space
             </div>
-            <div className="pt-2">
+            <div className="pt-2 space-y-2">
               <span className="text-xl">📷</span>
-              <h4 className="font-serif text-base text-white mt-1">Reserved for the Day We Meet</h4>
-              <p className="font-serif italic text-xs text-[#B0B0B0] leading-relaxed mt-2 font-light">
+              <h4 className="font-serif text-base text-white">Reserved for the Day We Meet</h4>
+              <p className="font-serif italic text-xs text-[#B0B0B0] leading-relaxed font-light">
                 &ldquo;This frame is intentionally kept waiting. The moment we take our very first real photograph together, it will live right here forever in our sanctuary.&rdquo;
               </p>
             </div>
             <div className="border-t border-white/10 pt-3 flex items-center justify-between text-[10px] font-mono text-[#777777]">
-              <span>Future Memory</span>
-              <span>Soon InshaAllah / With Blessings</span>
+              <span>Future Milestone</span>
+              <span>With Blessings</span>
             </div>
           </div>
         </div>
@@ -740,7 +968,7 @@ export function BirthdayCelebrationHome() {
           May Your Life Be As Pure and Beautiful As Your Soul
         </h3>
         <p className="font-serif italic text-sm sm:text-base text-[#C0C0C0] max-w-2xl mx-auto leading-relaxed font-light">
-          &ldquo;Rey, you bring calmness to my life. Today, as you step into a new year of your life, I want you to know that you will never have to walk alone. Through every dream, every prayer, and every travel road ahead, I am right here by your side. Happy Birthday, my love.&rdquo;
+          &ldquo;Ray, you bring calmness to my life. Today, as you step into a new year of your life, I want you to know that you will never have to walk alone. Through every dream, every prayer, and every travel road ahead, I am right here by your side. Happy Birthday, my love.&rdquo;
         </p>
       </div>
 
@@ -871,6 +1099,18 @@ export function BirthdayCelebrationHome() {
           </div>
         </form>
       </Modal>
+
+      {/* Media Picker Modal for selecting uploaded photos of Ray */}
+      <MediaPickerModal
+        isOpen={isMediaPickerOpen}
+        onClose={() => setIsMediaPickerOpen(false)}
+        onSelect={handleSelectFromLibrary}
+        multiple={true}
+        title="Add Ray's Photographs to Scrapbook"
+        description="Select authentic photographs of Ray from our centralized media library to feature in her keepsake scrapbook."
+        allowedMediaType="image"
+        defaultCategory="birthday"
+      />
     </div>
   );
 }

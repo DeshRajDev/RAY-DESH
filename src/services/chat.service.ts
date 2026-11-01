@@ -44,6 +44,10 @@ class ChatService {
   private currentWallpaper: ChatWallpaper = DEFAULT_WALLPAPER;
   private typingTimer: NodeJS.Timeout | null = null;
   private currentActiveUserId: string | null = null;
+  private currentActiveUserMongoId: string | null = null;
+  private currentUserRole: string | null = null;
+  private partnerMongoId: string | null = null;
+  private partnerId: string | null = null;
   private socket: Socket | null = null;
   private isConnected: boolean = false;
   private isChatViewActive: boolean = false;
@@ -82,9 +86,21 @@ class ChatService {
   }
 
   // --- Real Socket.IO Lifecycle ---
-  public initSocket(userId: string) {
+  public initSocket(user: any, partnerUser?: any) {
     if (typeof window === 'undefined') return;
-    this.currentActiveUserId = userId;
+
+    if (typeof user === 'string') {
+      this.currentActiveUserId = user;
+    } else if (user) {
+      this.currentActiveUserId = user.id;
+      this.currentActiveUserMongoId = user._id || user.mongoId || null;
+      this.currentUserRole = user.role || null;
+    }
+
+    if (partnerUser) {
+      this.partnerId = partnerUser.id || null;
+      this.partnerMongoId = partnerUser._id || partnerUser.mongoId || null;
+    }
 
     if (this.socket && this.socket.connected) {
       return;
@@ -167,17 +183,21 @@ class ChatService {
       this.notifyListeners();
 
       // If message is for me, immediately acknowledge delivery (turns sender's tick into double grey ticks)
-      if (this.currentActiveUserId && formatted.receiverId === this.currentActiveUserId) {
+      if (this.isIncomingMessage(formatted)) {
         this.markAsDelivered([formatted.id]);
 
         // If user is currently looking at the chat, mark as read immediately (double blue ticks)
         if (this.isChatViewActive) {
           this.markAsRead([formatted.id]);
+        } else {
+          this.unreadCount = this.unreadCount + 1;
+          updateAppBadge(this.unreadCount);
+          this.unreadListeners.forEach((l) => l(this.unreadCount));
         }
 
         notificationService.addNotification({
           type: 'message_reaction',
-          title: `New message from ${formatted.senderId === 'user_1' ? 'Desh' : 'Rey'}`,
+          title: `New message from ${formatted.senderRole === 'partner1' ? 'Desh' : 'Ray'}`,
           description: formatted.content || 'Sent media attachment',
           linkUrl: '/chat',
           actionText: 'Reply in Chat',
@@ -243,8 +263,15 @@ class ChatService {
     });
 
     // 5. Unread count updates for Web Badging API and UI indicators
-    this.socket.on('unread:count', (data: { userId?: string; count: number }) => {
-      if (!data.userId || data.userId === this.currentActiveUserId) {
+    this.socket.on('unread:count', (data: { userId?: string; userRole?: string; count: number }) => {
+      const isForMe = !data.userId ||
+        data.userId === this.currentActiveUserId ||
+        (this.currentActiveUserMongoId && data.userId === this.currentActiveUserMongoId) ||
+        (this.currentUserRole && data.userRole && data.userRole === this.currentUserRole) ||
+        (this.currentUserRole === 'partner1' && data.userId === 'user_1') ||
+        (this.currentUserRole === 'partner2' && data.userId === 'user_2');
+
+      if (isForMe) {
         this.unreadCount = Math.max(0, data.count || 0);
         updateAppBadge(this.unreadCount);
         this.unreadListeners.forEach((l) => l(this.unreadCount));
@@ -289,24 +316,50 @@ class ChatService {
     }
   }
 
+  public isIncomingMessage(msg: any): boolean {
+    if (msg.senderRole && this.currentUserRole) {
+      return msg.senderRole !== this.currentUserRole;
+    }
+    const sId = String(msg.senderId || '').trim();
+    if (this.currentActiveUserMongoId && sId === this.currentActiveUserMongoId) {
+      return false;
+    }
+    if (this.currentActiveUserId && sId === this.currentActiveUserId) {
+      return false;
+    }
+    const rId = String(msg.receiverId || '').trim();
+    if (this.currentActiveUserMongoId && rId === this.currentActiveUserMongoId) {
+      return true;
+    }
+    if (this.currentActiveUserId && rId === this.currentActiveUserId) {
+      return true;
+    }
+    if (this.partnerMongoId && sId === this.partnerMongoId) {
+      return true;
+    }
+    if (this.partnerId && sId === this.partnerId) {
+      return true;
+    }
+    if (this.currentActiveUserId === 'user_1' && sId === 'user_2') return true;
+    if (this.currentActiveUserId === 'user_2' && sId === 'user_1') return true;
+    return false;
+  }
+
   public setChatViewActive(isActive: boolean) {
     this.isChatViewActive = isActive;
-    if (isActive && this.currentActiveUserId) {
-      // Mark all unread received messages as read
+    if (isActive) {
+      // Mark all unread incoming messages as read
       const unreadIds = this.messages
-        .filter((m) => m.receiverId === this.currentActiveUserId && !m.isRead)
+        .filter((m) => this.isIncomingMessage(m) && !m.isRead)
         .map((m) => m.id);
 
-      if (unreadIds.length > 0) {
-        this.markAsRead(unreadIds);
-      }
+      this.markAsRead(unreadIds.length > 0 ? unreadIds : undefined);
     }
   }
 
   private acknowledgeUndelivered() {
-    if (!this.currentActiveUserId) return;
     const undeliveredIds = this.messages
-      .filter((m) => m.receiverId === this.currentActiveUserId && !m.isDelivered)
+      .filter((m) => this.isIncomingMessage(m) && !m.isDelivered)
       .map((m) => m.id);
 
     if (undeliveredIds.length > 0) {
@@ -590,14 +643,31 @@ class ChatService {
       // non-blocking
     }
 
-    // Immediately recalculate local unread count and app badge
-    if (messageIds && messageIds.length > 0) {
-      this.unreadCount = Math.max(0, this.unreadCount - messageIds.length);
-    } else {
-      this.unreadCount = 0;
+    // Immediately mark local messages as read so UI updates without lag
+    let hasChanges = false;
+    this.messages = this.messages.map((m) => {
+      const isTarget = !messageIds || messageIds.length === 0 || messageIds.includes(m.id);
+      if (isTarget && this.isIncomingMessage(m) && !m.isRead) {
+        hasChanges = true;
+        return {
+          ...m,
+          isRead: true,
+          isDelivered: true,
+          status: 'read',
+          readAt: new Date().toISOString(),
+        };
+      }
+      return m;
+    });
+
+    if (hasChanges) {
+      this.saveMessages();
+      this.notifyListeners();
     }
-    updateAppBadge(this.unreadCount);
-    this.unreadListeners.forEach((l) => l(this.unreadCount));
+
+    this.unreadCount = 0;
+    updateAppBadge(0);
+    this.unreadListeners.forEach((l) => l(0));
   }
 
   // --- Genuine Media Upload with Direct Cloudinary Pipeline ---
@@ -642,13 +712,11 @@ class ChatService {
         this.notifyListeners();
 
         // If user is actively viewing chat, immediately mark unread messages as read
-        if (this.isChatViewActive && this.currentActiveUserId) {
+        if (this.isChatViewActive) {
           const unreadIds = normalized
-            .filter((m) => m.receiverId === this.currentActiveUserId && !m.isRead)
+            .filter((m) => this.isIncomingMessage(m) && !m.isRead)
             .map((m) => m.id);
-          if (unreadIds.length > 0) {
-            this.markAsRead(unreadIds);
-          }
+          this.markAsRead(unreadIds.length > 0 ? unreadIds : undefined);
         }
 
         return { success: true, data: normalized };

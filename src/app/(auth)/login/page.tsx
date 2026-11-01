@@ -14,9 +14,6 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Auto-detect partner based on entered phone/email
-  const detectedPartner = authService.identifyAccount(identifier);
-
   const handleFormLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -111,12 +108,6 @@ export default function LoginPage() {
                 className="clay-input w-full h-11 pl-10 pr-3 text-xs text-white"
               />
             </div>
-            {detectedPartner && (
-              <div className="text-[10px] font-mono text-emerald-400 flex items-center gap-1 pl-1">
-                <span>Recognized partner:</span>
-                <strong className="text-white uppercase">{detectedPartner === 'desh' ? 'Desh (Partner 1)' : 'Rey (Partner 2)'}</strong>
-              </div>
-            )}
           </div>
 
           {/* Password Input */}

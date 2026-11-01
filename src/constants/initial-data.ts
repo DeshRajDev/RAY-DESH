@@ -25,22 +25,22 @@ export const currentUser: User = {
   email: 'desh@couple.local',
   phoneNumber: '8580962780',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
-  bio: 'Building our cozy corner of the internet. Forever grateful for you, Rey.',
+  bio: 'Building our cozy corner of the internet. Forever grateful for you, Ray.',
   birthday: '2004-05-15T00:00:00.000Z',
   favoriteSong: 'Samjhawan - Arijit Singh & Shreya Ghoshal',
   favoritePlace: 'Dal Lake Wooden Houseboat, Srinagar',
   favoriteQuote: 'In all the world, there is no heart for me like yours.',
   favoriteColor: '#171717',
-  statusMessage: 'Thinking about our next midnight walk with Rey 🌙',
+  statusMessage: 'Thinking about our next midnight walk with Ray 🌙',
   isOnline: true,
   role: 'partner1',
 };
 
 export const partnerUser: User = {
   id: 'user_2',
-  name: 'Rey',
+  name: 'Ray',
   nickname: 'My Queen',
-  email: 'rey@couple.local',
+  email: 'ray@couple.local',
   phoneNumber: '9015006850',
   avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&auto=format&fit=crop&q=80',
   bio: 'Coffee lover, stargazing enthusiast, and your biggest cheerleader ✨',
@@ -362,10 +362,10 @@ export const initialDates: DateEvent[] = [
   },
   {
     id: 'date_2',
-    title: "Rey's Birthday 🎂",
+    title: "Ray's Birthday 🎂",
     date: '2005-11-01T00:00:00.000Z',
     type: 'Birthday',
-    description: 'Celebrating the birth of the most radiant soul in my world, Rey.',
+    description: 'Celebrating the birth of the most radiant soul in my world, Ray.',
     location: 'Home & Secret Getaway',
     isRecurringYearly: true,
     photos: ['https://images.unsplash.com/photo-1513151233558-d860c5398176?w=800&auto=format&fit=crop&q=80'],
@@ -410,7 +410,7 @@ export const initialDates: DateEvent[] = [
 export const initialBirthdayData: BirthdayData = {
   partnerBirthday: '2005-11-01T00:00:00.000Z',
   myBirthday: '2004-05-15T00:00:00.000Z',
-  partnerName: 'Rey',
+  partnerName: 'Ray',
   plans: [
     {
       id: 'bplan_1',
@@ -477,7 +477,7 @@ export const initialBirthdayData: BirthdayData = {
       isClaimed: false
     }
   ],
-  specialMessageForPartner: 'To my favorite person in the entire universe: every single day with you is a gift I cherish more than words can ever capture. Happy Birthday, my love Rey ❤️',
+  specialMessageForPartner: 'To my favorite person in the entire universe: every single day with you is a gift I cherish more than words can ever capture. Happy Birthday, my love Ray ❤️',
   specialMessageFromPartner: 'Thank you Desh for making every ordinary day feel like a magical movie scene. I love you endlessly.'
 };
 

@@ -188,7 +188,7 @@ export default function BirthdayPage() {
                 : 'text-[#888888] hover:text-white'
             }`}
           >
-            {"Rey's Birthday (Nov 1)"}
+            {"Ray's Birthday (Nov 1)"}
           </button>
           <button
             onClick={() => setSelectedCelebrantId('user_1')}

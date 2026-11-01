@@ -69,14 +69,14 @@ export default function ProfilePage() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   const handleOpenEdit = () => {
-    const target = activeProfileTab === 'me' ? user : partner;
-    setEditName(target.name);
-    setEditNickname(target.nickname);
-    setEditBio(target.bio);
-    setEditAvatar(target.avatar);
-    setEditStatus(target.statusMessage || '');
-    setEditFavoriteSong(target.favoriteSong || '');
-    setEditFavoritePlace(target.favoritePlace || '');
+    // Only the authenticated current user can edit their own profile
+    setEditName(user.name);
+    setEditNickname(user.nickname);
+    setEditBio(user.bio);
+    setEditAvatar(user.avatar);
+    setEditStatus(user.statusMessage || '');
+    setEditFavoriteSong(user.favoriteSong || '');
+    setEditFavoritePlace(user.favoritePlace || '');
     setIsEditModalOpen(true);
   };
 
@@ -105,8 +105,7 @@ export default function ProfilePage() {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    const targetUserId = activeProfileTab === 'me' ? user.id : partner.id;
-    await updateUserProfile(targetUserId, {
+    await updateUserProfile(user.id, {
       name: editName,
       nickname: editNickname,
       avatar: editAvatar,
@@ -178,14 +177,16 @@ export default function ProfilePage() {
               alt={currentViewUser.name}
               className="h-28 w-28 sm:h-32 sm:w-32 rounded-3xl object-cover border-2 border-white/20 shadow-2xl group-hover:scale-102 transition-transform"
             />
-            <button
-              onClick={handleOpenEdit}
-              className="absolute inset-0 rounded-3xl bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs gap-1 transition-opacity backdrop-blur-xs"
-              title="Change photo"
-            >
-              <Camera className="h-4 w-4" />
-              <span>Change</span>
-            </button>
+            {activeProfileTab === 'me' && (
+              <button
+                onClick={handleOpenEdit}
+                className="absolute inset-0 rounded-3xl bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs gap-1 transition-opacity backdrop-blur-xs"
+                title="Change photo"
+              >
+                <Camera className="h-4 w-4" />
+                <span>Change</span>
+              </button>
+            )}
             <button
               onClick={(e) => triggerHeartEffect(e.clientX, e.clientY)}
               className="absolute -bottom-2 -right-2 h-9 w-9 rounded-full bg-black border border-white/20 flex items-center justify-center text-white hover:scale-110 active:scale-90 transition-transform shadow-lg"
@@ -211,13 +212,20 @@ export default function ProfilePage() {
                 </span>
               </div>
 
-              <button
-                onClick={handleOpenEdit}
-                className="clay-btn clay-btn-secondary px-4 py-2 text-xs flex items-center justify-center gap-1.5 w-full sm:w-auto shadow-md"
-              >
-                <Edit3 className="h-3.5 w-3.5" />
-                <span>Edit Profile &amp; Avatar</span>
-              </button>
+              {activeProfileTab === 'me' ? (
+                <button
+                  onClick={handleOpenEdit}
+                  className="clay-btn clay-btn-secondary px-4 py-2 text-xs flex items-center justify-center gap-1.5 w-full sm:w-auto shadow-md"
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                  <span>Edit Profile &amp; Avatar</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-[11px] font-mono text-[#888888]">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Partner Profile (Read Only)</span>
+                </div>
+              )}
             </div>
 
             {currentViewUser.statusMessage && (

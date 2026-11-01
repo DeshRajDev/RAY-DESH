@@ -100,7 +100,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AnimatePresence>
         {showBirthdayEntrance && (
           <BirthdayEntrance
-            celebrantName={partner?.name || 'Rey'}
+            celebrantName={partner?.name === 'Desh' ? user?.name || 'Ray' : partner?.name || 'Ray'}
+            celebrantPhoto={partner?.name === 'Desh' ? user?.avatar : partner?.avatar}
             onEnter={() => {
               if (typeof window !== 'undefined') {
                 sessionStorage.setItem('ray_birthday_entrance_shown_2026', 'true');

@@ -7,19 +7,24 @@ import { sendSuccess, sendError } from '../../utils/response';
 
 const router = Router();
 
+// Helper to extract string partner ID safely from couple
+function getPartnerId(couple: any, myUserId: string): string {
+  const p1 = (couple.partner1Id?._id || couple.partner1Id || couple.partner1?._id || couple.partner1 || '').toString();
+  const p2 = (couple.partner2Id?._id || couple.partner2Id || couple.partner2?._id || couple.partner2 || '').toString();
+  return p1 === myUserId ? p2 : p1;
+}
+
 // GET partner profile
 router.get('/partner', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const couple = req.couple!;
-    const partnerId = couple.partner1Id.toString() === req.user!.id
-      ? couple.partner2Id
-      : couple.partner1Id;
-
+    const partnerId = getPartnerId(req.couple!, req.user!.id);
     const partner = await User.findById(partnerId);
     if (!partner) {
       return sendError(res, 'Partner not found', 404);
     }
-    return sendSuccess(res, partner.toJSON());
+    const partnerJson = partner.toJSON();
+    if (partnerJson.name === 'Rey') partnerJson.name = 'Ray';
+    return sendSuccess(res, partnerJson);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to fetch partner';
     return sendError(res, msg, 500);
@@ -29,19 +34,20 @@ router.get('/partner', authenticate, requireCouple, async (req: AuthenticatedReq
 // GET both profiles (current user and partner) with real avatars
 router.get('/profiles', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const couple = req.couple!;
-    const partnerId = couple.partner1Id.toString() === req.user!.id
-      ? couple.partner2Id
-      : couple.partner1Id;
-
+    const partnerId = getPartnerId(req.couple!, req.user!.id);
     const [me, partner] = await Promise.all([
       User.findById(req.user!.id),
       User.findById(partnerId),
     ]);
 
+    const meJson = me?.toJSON();
+    const partnerJson = partner?.toJSON();
+    if (meJson?.name === 'Rey') meJson.name = 'Ray';
+    if (partnerJson?.name === 'Rey') partnerJson.name = 'Ray';
+
     return sendSuccess(res, {
-      me: me?.toJSON(),
-      partner: partner?.toJSON(),
+      me: meJson,
+      partner: partnerJson,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to fetch profiles';
@@ -52,16 +58,12 @@ router.get('/profiles', authenticate, requireCouple, async (req: AuthenticatedRe
 // GET partner presence (real online status & accurate lastSeenAt)
 router.get('/presence', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const couple = req.couple!;
-    const partnerId = couple.partner1Id.toString() === req.user!.id
-      ? couple.partner2Id
-      : couple.partner1Id;
-
+    const partnerId = getPartnerId(req.couple!, req.user!.id);
     const partner = await User.findById(partnerId).select('isOnline lastSeenAt lastSeen updatedAt name role');
     if (!partner) return sendError(res, 'Partner not found', 404);
 
     return sendSuccess(res, {
-      userId: partnerId.toString(),
+      userId: partnerId,
       isOnline: Boolean(partner.isOnline),
       lastSeenAt: (partner as any).lastSeenAt || partner.updatedAt,
       lastSeen: partner.lastSeen || (partner.isOnline ? 'Online now' : 'Recently active'),

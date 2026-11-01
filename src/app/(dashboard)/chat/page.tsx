@@ -119,7 +119,7 @@ export default function ChatPage() {
 
   // Initialize Real Socket Connection & Mark Chat as Active
   useEffect(() => {
-    chatService.initSocket(user.id);
+    chatService.initSocket(user, partner);
     chatService.setChatViewActive(true);
 
     const unsubConnection = chatService.subscribeConnection(connected => {
@@ -159,6 +159,8 @@ export default function ChatPage() {
       .then(res => {
         setMessages(res.data ?? []);
         setIsLoading(false);
+        // Guarantee server read receipts and zero out unread badges when chat view is mounted
+        chatService.markAsRead();
       })
       .catch(() => setIsLoading(false));
 
@@ -172,7 +174,39 @@ export default function ChatPage() {
       unsubMessages();
       unsubUnread();
     };
-  }, [user.id, partner.id]);
+  }, [user, partner]);
+
+  const checkIsMe = useCallback((msg: Message) => {
+    if ((msg as any).senderRole) {
+      return (msg as any).senderRole === user.role;
+    }
+    const sId = String(msg.senderId || '').trim();
+    const myId = String(user.id || '').trim();
+    const myMongoId = String((user as any).mongoId || (user as any)._id || '').trim();
+
+    if (sId && (sId === myId || (myMongoId && sId === myMongoId))) {
+      return true;
+    }
+
+    const p1Id = String((couple as any)?.partner1Id || couple?.partner1?.id || (couple as any)?.partner1 || '').trim();
+    const p2Id = String((couple as any)?.partner2Id || couple?.partner2?.id || (couple as any)?.partner2 || '').trim();
+
+    if (user.role === 'partner1') {
+      if (sId === 'user_1' || (p1Id && sId === p1Id)) return true;
+      if (sId === 'user_2' || (p2Id && sId === p2Id)) return false;
+    } else if (user.role === 'partner2') {
+      if (sId === 'user_2' || (p2Id && sId === p2Id)) return true;
+      if (sId === 'user_1' || (p1Id && sId === p1Id)) return false;
+    }
+
+    return sId === myId;
+  }, [user, couple]);
+
+  const firstUnreadMsgId = useMemo(() => {
+    if (unreadChatCount <= 0) return null;
+    const first = filteredMessages.find(m => !m.isRead && !checkIsMe(m));
+    return first ? first.id : null;
+  }, [filteredMessages, unreadChatCount, checkIsMe]);
 
   const latestMessage = useMemo(() => {
     if (messages.length === 0) return null;
@@ -601,43 +635,27 @@ export default function ChatPage() {
               </div>
             ) : (
               filteredMessages.map((msg) => {
-                const isMe = (() => {
-                  // 1. Direct role match (100% reliable across all sessions & IDs)
-                  if ((msg as any).senderRole) {
-                    return (msg as any).senderRole === user.role;
-                  }
-                  const sId = String(msg.senderId || '').trim();
-                  const myId = String(user.id || '').trim();
-                  const myMongoId = String((user as any).mongoId || (user as any)._id || '').trim();
-
-                  // 2. Exact match with user id or mongoId
-                  if (sId && (sId === myId || (myMongoId && sId === myMongoId))) {
-                    return true;
-                  }
-
-                  // 3. Partner 1 vs Partner 2 role-based mapping
-                  const p1Id = String((couple as any)?.partner1Id || couple?.partner1?.id || (couple as any)?.partner1 || '').trim();
-                  const p2Id = String((couple as any)?.partner2Id || couple?.partner2?.id || (couple as any)?.partner2 || '').trim();
-
-                  if (user.role === 'partner1') {
-                    if (sId === 'user_1' || (p1Id && sId === p1Id)) return true;
-                    if (sId === 'user_2' || (p2Id && sId === p2Id)) return false;
-                  } else if (user.role === 'partner2') {
-                    if (sId === 'user_2' || (p2Id && sId === p2Id)) return true;
-                    if (sId === 'user_1' || (p1Id && sId === p1Id)) return false;
-                  }
-
-                  return sId === myId;
-                })();
+                const isMe = checkIsMe(msg);
 
                 return (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className={`group relative flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
-                  >
+                  <React.Fragment key={msg.id}>
+                    {/* In-chat unread separator: displays only when genuine unread incoming messages exist */}
+                    {msg.id === firstUnreadMsgId && (
+                      <div className="flex items-center justify-center my-4 w-full py-1">
+                        <div className="flex-1 border-t border-rose-500/20" />
+                        <span className="mx-3 rounded-full bg-rose-500/10 border border-rose-500/30 px-3.5 py-0.5 text-[10px] font-mono font-medium text-rose-400 shadow-sm tracking-wide">
+                          {unreadChatCount} Unread {unreadChatCount === 1 ? 'Message' : 'Messages'}
+                        </span>
+                        <div className="flex-1 border-t border-rose-500/20" />
+                      </div>
+                    )}
+
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className={`group relative flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                    >
                     {/* Story reply card reference if exists */}
                     {(msg as any).storyReference && (
                       <div
@@ -843,6 +861,7 @@ export default function ChatPage() {
                       </div>
                     </div>
                   </motion.div>
+                </React.Fragment>
                 );
               })
             )}

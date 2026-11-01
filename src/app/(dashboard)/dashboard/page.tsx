@@ -124,7 +124,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <p className="text-xs font-serif text-white font-medium">
-                Today is Rey&apos;s Birthday Celebration! 🎂
+                Today is Ray&apos;s Birthday Celebration! 🎂
               </p>
               <p className="text-[10px] font-mono text-[#888888]">
                 Asia/Kolkata • November 1, 2026

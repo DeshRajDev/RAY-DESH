@@ -267,13 +267,22 @@ router.post('/delivered', authenticate, requireCouple, async (req: Authenticated
 router.post('/read', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { messageIds } = req.body;
+    const userObjId = new mongoose.Types.ObjectId(req.user!.id);
+    const coupleObjId = new mongoose.Types.ObjectId(req.couple!.id);
+
     const query: Record<string, unknown> = {
-      coupleId: req.couple!.id,
-      receiverId: req.user!.id,
+      coupleId: coupleObjId,
+      $or: [
+        { receiverId: userObjId },
+        { receiverId: req.user!.id },
+        { senderId: { $ne: userObjId } },
+      ],
       isRead: false,
     };
+
     if (Array.isArray(messageIds) && messageIds.length > 0) {
-      query._id = { $in: messageIds };
+      const validIds = messageIds.map(id => mongoose.isValidObjectId(id) ? new mongoose.Types.ObjectId(id) : id);
+      query._id = { $in: validIds };
     }
 
     const now = new Date();
@@ -298,6 +307,7 @@ router.post('/read', authenticate, requireCouple, async (req: AuthenticatedReque
       });
       io.to(`couple:${req.couple!.id}`).emit('unread:count', {
         userId: req.user!.id,
+        userRole: req.user!.role,
         count: 0,
       });
     }
@@ -312,9 +322,16 @@ router.post('/read', authenticate, requireCouple, async (req: AuthenticatedReque
 // GET unread message count for the authenticated recipient
 router.get('/unread-count', authenticate, requireCouple, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const userObjId = new mongoose.Types.ObjectId(req.user!.id);
+    const coupleObjId = new mongoose.Types.ObjectId(req.couple!.id);
+
     const count = await Message.countDocuments({
-      coupleId: req.couple!.id,
-      receiverId: req.user!.id,
+      coupleId: coupleObjId,
+      $or: [
+        { receiverId: userObjId },
+        { receiverId: req.user!.id },
+        { senderId: { $ne: userObjId } },
+      ],
       isRead: false,
     });
     return sendSuccess(res, { count });
