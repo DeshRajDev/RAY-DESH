@@ -48,6 +48,7 @@ class ChatService {
   private isConnected: boolean = false;
   private isChatViewActive: boolean = false;
   private pendingRetries: Map<string, any> = new Map();
+  private visibilityListenerAttached: boolean = false;
 
   constructor() {
     this.loadMessages();
@@ -112,6 +113,21 @@ class ChatService {
       this.notifyConnection();
       this.startHeartbeat();
       this.fetchUnreadCount().catch(() => {});
+
+      if (typeof window !== 'undefined' && !this.visibilityListenerAttached) {
+        this.visibilityListenerAttached = true;
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            if (window.location.pathname.includes('/chat')) {
+              this.setChatViewActive(true);
+              this.acknowledgeUndelivered();
+            }
+            this.fetchUnreadCount().catch(() => {});
+          } else {
+            this.setChatViewActive(false);
+          }
+        });
+      }
 
       // Check if we have un-delivered messages in our local state to acknowledge
       this.acknowledgeUndelivered();
@@ -624,6 +640,17 @@ class ChatService {
         this.messages = normalized;
         this.saveMessages();
         this.notifyListeners();
+
+        // If user is actively viewing chat, immediately mark unread messages as read
+        if (this.isChatViewActive && this.currentActiveUserId) {
+          const unreadIds = normalized
+            .filter((m) => m.receiverId === this.currentActiveUserId && !m.isRead)
+            .map((m) => m.id);
+          if (unreadIds.length > 0) {
+            this.markAsRead(unreadIds);
+          }
+        }
+
         return { success: true, data: normalized };
       }
     } catch (err) {

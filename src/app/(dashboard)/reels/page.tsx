@@ -1,49 +1,45 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Film,
   Plus,
   Heart,
-  ExternalLink,
-  Trash2,
-  Edit3,
-  Search,
-  ShieldCheck,
-  Calendar,
-  Sparkles,
-  Layers,
-  CheckCircle2,
-  AlertCircle,
+  MessageCircle,
+  Share2,
+  Bookmark,
   Volume2,
   VolumeX,
   ChevronUp,
   ChevronDown,
-  LayoutGrid,
-  Smartphone,
+  ArrowLeft,
+  MoreVertical,
+  Music2,
+  ExternalLink,
+  Sparkles,
+  Play,
+  Pause,
+  Trash2,
+  Edit3,
+  Copy,
+  Check,
   Images,
+  Filter,
+  X,
+  Send,
 } from 'lucide-react';
 import { useApp } from '@/stores/app-context';
-import { Reel, ReelCategory, MediaAsset } from '@/types';
+import { Reel, MediaAsset } from '@/types';
 import { reelsService } from '@/services/reels.service';
-import { ExternalVideoEmbed } from '@/components/reels/ExternalVideoEmbed';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { Modal, EmptyState } from '@/components/ui/modal';
 import { MediaPickerModal } from '@/components/media/MediaPickerModal';
-import { formatDate } from '@/lib/date-utils';
-
-function InstagramIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-    </svg>
-  );
-}
+import { ExternalVideoEmbed } from '@/components/reels/ExternalVideoEmbed';
 
 const CATEGORIES: { label: string; value: string }[] = [
-  { label: 'All', value: 'All' },
+  { label: 'All Reels', value: 'All' },
   { label: 'Romantic', value: 'romantic' },
   { label: 'Memories', value: 'memories' },
   { label: 'Favorites', value: 'favorites' },
@@ -51,60 +47,56 @@ const CATEGORIES: { label: string; value: string }[] = [
 ];
 
 export default function ReelsPage() {
-  const { triggerHeartEffect } = useApp();
+  const router = useRouter();
+  const { user, partner, triggerHeartEffect } = useApp();
+
   const [reels, setReels] = useState<Reel[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-
-  // Feed View & Autoplay states
-  const [viewMode, setViewMode] = useState<'feed' | 'grid'>('feed');
   const [activeReelIndex, setActiveReelIndex] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(true);
-  const feedContainerRef = useRef<HTMLDivElement>(null);
 
-  // Modals
+  // Play/Pause & Tap Animation state
+  const [isPlayingMap, setIsPlayingMap] = useState<Record<number, boolean>>({});
+  const [centerIconState, setCenterIconState] = useState<{ index: number; type: 'play' | 'pause' | 'heart' } | null>(null);
+  const [expandedCaptions, setExpandedCaptions] = useState<Record<string, boolean>>({});
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  // Modals & Drawers
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [activeReel, setActiveReel] = useState<Reel | null>(null);
 
-  const handleSelectFromLibrary = async (selectedAssets: MediaAsset[]) => {
-    for (const asset of selectedAssets) {
-      try {
-        await reelsService.addReel({
-          url: asset.url,
-          title: asset.title || 'Sanctuary Reel',
-          caption: asset.caption || '',
-          category: 'romantic',
-          isFavorite: asset.isFavorite,
-        });
-      } catch (err) {
-        console.warn('Reel already in list or error:', err);
-      }
-    }
-    const res = await reelsService.getReels(selectedCategory);
-    if (res && res.data) setReels(res.data);
-    triggerHeartEffect();
-  };
+  // Comments state (stored locally per reel)
+  const [commentText, setCommentText] = useState('');
+  const [reelComments, setReelComments] = useState<Record<string, { id: string; name: string; avatar?: string; text: string; time: string }[]>>({});
 
-  // Add Form State
+  // Add Reel Form State
   const [newUrl, setNewUrl] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newCaption, setNewCaption] = useState('');
   const [newCategory, setNewCategory] = useState('romantic');
   const [newIsFavorite, setNewIsFavorite] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
-  const [addSuccess, setAddSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Edit Form State
+  // Edit Reel Form State
   const [editTitle, setEditTitle] = useState('');
   const [editCaption, setEditCaption] = useState('');
   const [editCategory, setEditCategory] = useState('romantic');
   const [editIsFavorite, setEditIsFavorite] = useState(false);
 
+  // Refs
+  const feedContainerRef = useRef<HTMLDivElement>(null);
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+  const lastTapRef = useRef<number>(0);
+
+  // 1. Fetch & Subscribe to Reels
   useEffect(() => {
     setIsLoading(true);
     reelsService.getReels(selectedCategory).then((res) => {
@@ -129,25 +121,9 @@ export default function ReelsPage() {
     return () => unsubscribe();
   }, [selectedCategory]);
 
-  // Filtered Reels by Search Query
-  const displayedReels = useMemo(() => {
-    if (!searchQuery.trim()) return reels;
-    const q = searchQuery.toLowerCase();
-    return reels.filter(
-      (r) =>
-        r.title?.toLowerCase().includes(q) ||
-        r.caption?.toLowerCase().includes(q) ||
-        r.category?.toLowerCase().includes(q) ||
-        r.platform?.toLowerCase().includes(q)
-    );
-  }, [reels, searchQuery]);
-
-  const totalCount = reels.length;
-  const favoritesCount = reels.filter((r) => r.isFavorite).length;
-
-  // IntersectionObserver to auto-play only visible reel and pause others
+  // 2. Vertical Scroll-Snap & Intersection Observer to manage single active playing reel
   useEffect(() => {
-    if (viewMode !== 'feed' || displayedReels.length === 0) return;
+    if (reels.length === 0) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -165,105 +141,201 @@ export default function ReelsPage() {
       },
       {
         root: feedContainerRef.current,
-        threshold: 0.6,
+        threshold: 0.65,
       }
     );
 
-    const cards = feedContainerRef.current?.querySelectorAll('.reel-feed-card');
+    const cards = feedContainerRef.current?.querySelectorAll('.insta-reel-card');
     cards?.forEach((el) => observer.observe(el));
 
     return () => observer.disconnect();
-  }, [viewMode, displayedReels]);
+  }, [reels]);
+
+  // 3. Play / Pause videos according to activeReelIndex
+  useEffect(() => {
+    videoRefs.current.forEach((video, idx) => {
+      if (!video) return;
+      if (idx === activeReelIndex) {
+        video.muted = isMuted;
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlayingMap((prev) => ({ ...prev, [idx]: true }));
+            })
+            .catch(() => {
+              setIsPlayingMap((prev) => ({ ...prev, [idx]: false }));
+            });
+        }
+      } else {
+        video.pause();
+        video.currentTime = 0;
+        setIsPlayingMap((prev) => ({ ...prev, [idx]: false }));
+      }
+    });
+  }, [activeReelIndex, isMuted, reels]);
+
+  // 4. Keyboard Arrow Navigation (Desktop)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        scrollToReel(activeReelIndex + 1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        scrollToReel(activeReelIndex - 1);
+      } else if (e.key === 'm' || e.key === 'M') {
+        setIsMuted((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeReelIndex, reels.length]);
 
   const scrollToReel = (targetIdx: number) => {
-    if (targetIdx < 0 || targetIdx >= displayedReels.length) return;
+    if (targetIdx < 0 || targetIdx >= reels.length) return;
     const el = feedContainerRef.current?.querySelector(`[data-index="${targetIdx}"]`);
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       setActiveReelIndex(targetIdx);
     }
   };
 
-  // Add Reel Handler
+  // 5. Tap Handlers: Single tap play/pause, Double tap like
+  const handleVideoTap = (index: number, reel: Reel, e: React.MouseEvent) => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      // Double tap detected: LIKE / FAVORITE
+      handleToggleFavorite(reel);
+      setCenterIconState({ index, type: 'heart' });
+      triggerHeartEffect(e.clientX, e.clientY);
+      setTimeout(() => setCenterIconState(null), 900);
+      lastTapRef.current = 0;
+      return;
+    }
+
+    lastTapRef.current = now;
+
+    // Single tap after delay: Play/Pause toggle
+    setTimeout(() => {
+      if (Date.now() - lastTapRef.current >= DOUBLE_TAP_DELAY - 50 && lastTapRef.current !== 0) {
+        const video = videoRefs.current[index];
+        if (video) {
+          if (video.paused) {
+            video.play().catch(() => {});
+            setIsPlayingMap((prev) => ({ ...prev, [index]: true }));
+            setCenterIconState({ index, type: 'play' });
+          } else {
+            video.pause();
+            setIsPlayingMap((prev) => ({ ...prev, [index]: false }));
+            setCenterIconState({ index, type: 'pause' });
+          }
+          setTimeout(() => setCenterIconState(null), 700);
+        }
+      }
+    }, DOUBLE_TAP_DELAY);
+  };
+
+  const handleToggleFavorite = async (reel: Reel) => {
+    await reelsService.toggleFavorite(reel.id);
+    setReels((prev) =>
+      prev.map((r) => (r.id === reel.id ? { ...r, isFavorite: !r.isFavorite } : r))
+    );
+  };
+
+  const handleShareReel = async (reel: Reel) => {
+    const shareData = {
+      title: reel.title || 'Ray Sanctuary Reel',
+      text: reel.caption || 'Watch our romantic moments on Ray ❤️',
+      url: window.location.href,
+    };
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch {
+        // Fallback to clipboard
+      }
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(reel.url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
+  const handleAddComment = (reelId: string) => {
+    if (!commentText.trim()) return;
+    const newComment = {
+      id: `comm_${Date.now()}`,
+      name: user.name || 'You',
+      avatar: user.avatar,
+      text: commentText.trim(),
+      time: 'Just now',
+    };
+    setReelComments((prev) => ({
+      ...prev,
+      [reelId]: [...(prev[reelId] || []), newComment],
+    }));
+    setCommentText('');
+  };
+
+  const handleSelectFromLibrary = async (selectedAssets: MediaAsset[]) => {
+    for (const asset of selectedAssets) {
+      try {
+        await reelsService.addReel({
+          url: asset.url,
+          title: asset.title || 'Sanctuary Reel',
+          caption: asset.caption || '',
+          category: 'romantic',
+          isFavorite: asset.isFavorite,
+        });
+      } catch (err) {
+        console.warn('Reel already in list or error:', err);
+      }
+    }
+    const res = await reelsService.getReels(selectedCategory);
+    if (res && res.data) setReels(res.data);
+    triggerHeartEffect();
+    setIsMediaPickerOpen(false);
+  };
+
   const handleAddReel = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddError(null);
-    setAddSuccess(null);
-
-    const trimmedUrl = newUrl.trim();
-    if (!trimmedUrl) {
+    if (!newUrl.trim()) {
       setAddError('Please enter a video URL');
       return;
     }
-
-    if (!trimmedUrl.startsWith('https://')) {
-      setAddError('URL must use secure HTTPS (e.g. https://www.instagram.com/reel/...)');
-      return;
-    }
-
-    const isInstagram = trimmedUrl.includes('instagram.com');
-    const isFacebook = trimmedUrl.includes('facebook.com') || trimmedUrl.includes('fb.watch');
-
-    if (!isInstagram && !isFacebook) {
-      setAddError('Only official Instagram Reels/Posts and Facebook video URLs are supported.');
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       await reelsService.addReel({
-        url: trimmedUrl,
-        title: newTitle.trim() || undefined,
-        caption: newCaption.trim() || undefined,
+        url: newUrl.trim(),
+        title: newTitle.trim(),
+        caption: newCaption.trim(),
         category: newCategory,
         isFavorite: newIsFavorite,
       });
-
-      setAddSuccess('Reel saved to our gallery!');
-      setTimeout(() => {
-        setIsAddModalOpen(false);
-        setNewUrl('');
-        setNewTitle('');
-        setNewCaption('');
-        setNewCategory('romantic');
-        setNewIsFavorite(false);
-        setAddSuccess(null);
-        setAddError(null);
-      }, 600);
+      setIsAddModalOpen(false);
+      setNewUrl('');
+      setNewTitle('');
+      setNewCaption('');
+      triggerHeartEffect();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to add reel';
-      setAddError(msg);
+      setAddError(err instanceof Error ? err.message : 'Failed to save reel');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Toggle Favorite
-  const handleToggleFavorite = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    try {
-      await reelsService.toggleFavorite(id);
-      triggerHeartEffect(e.clientX, e.clientY);
-    } catch (err) {
-      console.error('Failed to favorite reel:', err);
-    }
-  };
-
-  // Open Edit Modal
-  const openEditModal = (reel: Reel) => {
-    setActiveReel(reel);
-    setEditTitle(reel.title || '');
-    setEditCaption(reel.caption || '');
-    setEditCategory(reel.category || 'romantic');
-    setEditIsFavorite(Boolean(reel.isFavorite));
-    setIsEditModalOpen(true);
-  };
-
-  // Handle Edit Submit
-  const handleEditSubmit = async (e: React.FormEvent) => {
+  const handleUpdateReel = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeReel) return;
-
+    setIsSubmitting(true);
     try {
       await reelsService.updateReel(activeReel.id, {
         title: editTitle.trim(),
@@ -272,246 +344,361 @@ export default function ReelsPage() {
         isFavorite: editIsFavorite,
       });
       setIsEditModalOpen(false);
-      setActiveReel(null);
-    } catch (err) {
-      console.error('Failed to update reel:', err);
+    } catch {
+      // handled
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Open Delete Confirmation Modal
-  const openDeleteModal = (reel: Reel) => {
-    setActiveReel(reel);
-    setIsDeleteModalOpen(true);
-  };
-
-  // Handle Delete Confirmation
-  const handleDeleteConfirm = async () => {
+  const handleDeleteReel = async () => {
     if (!activeReel) return;
+    setIsSubmitting(true);
     try {
       await reelsService.deleteReel(activeReel.id);
       setIsDeleteModalOpen(false);
-      setActiveReel(null);
-    } catch (err) {
-      console.error('Failed to delete reel:', err);
+      setIsMoreMenuOpen(false);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  const currentReel = reels[activeReelIndex];
+
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 space-y-8 select-none">
-      {/* 1. Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-white/10">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-[#777777]">
-            <Film className="h-3.5 w-3.5 text-white" />
-            <span>Shared Video Vault</span>
-          </div>
-          <h1 className="font-serif text-3xl sm:text-4xl font-light text-white tracking-tight">
-            Our Reels
-          </h1>
-          <p className="text-xs sm:text-sm text-[#888888] font-light max-w-xl leading-relaxed">
-            Little videos, big memories. A collection of moments we want to keep.
-          </p>
+    <div className="relative w-full h-[100dvh] bg-black text-white flex items-center justify-center overflow-hidden select-none">
+      {/* Loading Skeleton */}
+      {isLoading ? (
+        <div className="w-full max-w-[440px] h-[100dvh] bg-[#0A0A0A] flex flex-col items-center justify-center gap-4 animate-pulse">
+          <Film className="h-12 w-12 text-white/30 animate-spin" />
+          <p className="font-serif text-sm text-[#888888]">Loading Our Reels Sanctuary...</p>
         </div>
-
-        {/* Action Button & Statistics */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Mode Switcher */}
-          <div className="flex items-center gap-1 p-1 rounded-2xl bg-[#121212] border border-white/10">
-            <button
-              onClick={() => setViewMode('feed')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                viewMode === 'feed'
-                  ? 'bg-white text-black shadow-md'
-                  : 'text-[#888888] hover:text-white'
-              }`}
-            >
-              <Smartphone className="h-3.5 w-3.5" />
-              <span>Feed</span>
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                viewMode === 'grid'
-                  ? 'bg-white text-black shadow-md'
-                  : 'text-[#888888] hover:text-white'
-              }`}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              <span>Grid</span>
-            </button>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#121212] border border-white/10 text-xs text-[#888888] font-mono">
-            <span>{totalCount} Saved</span>
-            <span className="text-white/20">•</span>
-            <span className="text-white">{favoritesCount} Favorites</span>
-          </div>
-
-          <button
-            onClick={() => setIsMediaPickerOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-[#161616] border border-white/10 text-xs text-[#CCCCCC] hover:text-white hover:border-white/30 transition-all"
-            title="Pick video from Our Media Library"
-          >
-            <Images className="h-4 w-4" />
-            <span className="hidden sm:inline">From Library</span>
-          </button>
-
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white text-black text-xs font-medium shadow-[0_4px_16px_rgba(255,255,255,0.25),inset_0_1px_1px_rgba(255,255,255,1)] hover:scale-[1.02] active:scale-95 transition-all"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add Reel</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 2. Controls & Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-        {/* Category Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-          {CATEGORIES.map((cat) => {
-            const isActive = selectedCategory === cat.value;
-            return (
-              <button
-                key={cat.value}
-                onClick={() => setSelectedCategory(cat.value)}
-                className={`px-4 py-2 rounded-2xl text-xs font-normal whitespace-nowrap transition-all ${
-                  isActive
-                    ? 'bg-white text-black font-medium shadow-[0_4px_12px_rgba(255,255,255,0.2)]'
-                    : 'bg-[#121212] border border-white/5 text-[#777777] hover:text-white hover:border-white/15'
-                }`}
-              >
-                {cat.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Search Filter */}
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#666666]" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search saved reels..."
-            className="w-full pl-9 pr-3 py-2 rounded-2xl bg-[#101010] border border-white/10 text-xs text-white placeholder-[#555555] focus:outline-none focus:border-white/25 transition-all"
+      ) : reels.length === 0 ? (
+        <div className="w-full max-w-md p-6 text-center">
+          <EmptyState
+            icon={<Film className="h-10 w-10 text-white/50" />}
+            title="Our Reels Sanctuary is Empty"
+            description="Add your downloaded videos, romantic reels, and moments to enjoy them in full-screen immersion."
+            actionText="Add Reel"
+            onAction={() => setIsAddModalOpen(true)}
           />
         </div>
-      </div>
-
-      {/* 3. Reels Grid */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div
-              key={i}
-              className="rounded-3xl bg-[#0F0F0F] border border-white/5 p-4 space-y-4 animate-pulse"
+      ) : (
+        /* IMMERSIVE INSTAGRAM-STYLE REELS VIEWER */
+        <div className="relative w-full h-[100dvh] max-w-none md:max-w-[430px] md:h-[94dvh] md:rounded-3xl md:border md:border-white/10 md:shadow-2xl overflow-hidden bg-black flex flex-col justify-between">
+          
+          {/* TOP FLOATING OVERLAY: Back, Title/Category, and Add */}
+          <div className="absolute top-0 inset-x-0 z-30 p-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] flex items-center justify-between bg-gradient-to-b from-black/80 via-black/40 to-transparent pointer-events-auto">
+            <button
+              onClick={() => router.back()}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-md border border-white/15 text-white hover:bg-black/70 transition-all"
+              title="Go back"
             >
-              <div className="w-full aspect-[9/16] rounded-2xl bg-[#181818]" />
-              <div className="h-4 bg-[#181818] rounded w-3/4" />
-              <div className="h-3 bg-[#181818] rounded w-1/2" />
-            </div>
-          ))}
-        </div>
-      ) : displayedReels.length === 0 ? (
-        <EmptyState
-          icon={<Film className="h-8 w-8 text-[#777777]" />}
-          title="No Reels in this Category"
-          description="Save romantic Instagram Reels and Facebook videos so we can watch them together anytime."
-          actionText="Save a Reel"
-          onAction={() => setIsAddModalOpen(true)}
-        />
-      ) : viewMode === 'feed' ? (
-        /* IMMERSIVE VERTICAL REEL FEED WITH AUTOPLAY */
-        <div className="relative max-w-sm sm:max-w-md mx-auto">
-          {/* Header indicator & sound toggle */}
-          <div className="flex items-center justify-between pb-3 px-1 text-xs text-[#888888]">
-            <span className="font-mono">
-              Reel {activeReelIndex + 1} of {displayedReels.length}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsMuted(prev => !prev)}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-all text-xs"
-              >
-                {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
-                <span>{isMuted ? 'Muted' : 'Sound On'}</span>
-              </button>
-            </div>
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+
+            {/* Category Dropdown Pill */}
+            <button
+              onClick={() => setIsCategorySheetOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-black/50 backdrop-blur-md border border-white/20 text-xs font-medium text-white hover:bg-black/80 transition-all"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-rose-400" />
+              <span>{CATEGORIES.find((c) => c.value === selectedCategory)?.label || 'Reels'}</span>
+              <Filter className="h-3 w-3 text-white/70 ml-0.5" />
+            </button>
+
+            {/* Add Reel Button */}
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-black hover:scale-105 active:scale-95 transition-all shadow-lg"
+              title="Add a new Reel"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
           </div>
 
-          {/* Vertical Snap Scroll Feed */}
+          {/* DESKTOP FLOATING NAVIGATION CONTROLS */}
+          <div className="hidden md:flex absolute -right-16 top-1/2 -translate-y-1/2 flex-col gap-3 z-30">
+            <button
+              onClick={() => scrollToReel(activeReelIndex - 1)}
+              disabled={activeReelIndex === 0}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-[#161616] border border-white/20 text-white shadow-xl hover:bg-white hover:text-black transition-all disabled:opacity-30 disabled:pointer-events-none"
+              title="Previous Reel (Up Arrow)"
+            >
+              <ChevronUp className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => scrollToReel(activeReelIndex + 1)}
+              disabled={activeReelIndex === reels.length - 1}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-[#161616] border border-white/20 text-white shadow-xl hover:bg-white hover:text-black transition-all disabled:opacity-30 disabled:pointer-events-none"
+              title="Next Reel (Down Arrow)"
+            >
+              <ChevronDown className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* VERTICAL FULL-SCREEN SCROLL CONTAINER (Scroll-Snap Mandatory) */}
           <div
             ref={feedContainerRef}
-            className="h-[calc(100vh-14rem)] overflow-y-auto snap-y snap-mandatory rounded-3xl space-y-6 scrollbar-none pr-1"
+            className="w-full h-full overflow-y-scroll snap-y snap-mandatory scrollbar-none overscroll-y-contain"
           >
-            {displayedReels.map((reel, idx) => {
-              const isCurrent = idx === activeReelIndex;
-              const isNext = idx === activeReelIndex + 1;
-              const isInstagram = reel.platform === 'instagram';
+            {reels.map((reel, idx) => {
+              const isActive = idx === activeReelIndex;
+              const isDirectVideo =
+                reel.platform === 'upload' ||
+                reel.url.endsWith('.mp4') ||
+                reel.url.endsWith('.webm') ||
+                reel.url.endsWith('.mov') ||
+                reel.url.includes('/uploads/') ||
+                (!reel.url.includes('instagram.com') && !reel.url.includes('facebook.com') && !reel.url.includes('fb.watch'));
+
+              const creatorName = reel.createdByName || (idx % 2 === 0 ? partner.name : user.name);
+              const creatorAvatar = idx % 2 === 0 ? partner.avatar : user.avatar;
+              const isCaptionExpanded = expandedCaptions[reel.id] || false;
+              const commentsCount = (reelComments[reel.id]?.length || 0) + (reel.isFavorite ? 1 : 0);
 
               return (
                 <div
                   key={reel.id}
                   data-index={idx}
-                  className="reel-feed-card snap-center shrink-0 w-full min-h-[580px] rounded-3xl bg-[#101010] border border-white/15 overflow-hidden p-3.5 shadow-2xl flex flex-col justify-between"
+                  className="insta-reel-card snap-start snap-always w-full h-[100dvh] md:h-[94dvh] relative flex items-center justify-center bg-black overflow-hidden shrink-0"
                 >
-                  {/* Embedded Player with Autoplay on Active View */}
-                  <div className="w-full">
-                    <ExternalVideoEmbed
-                      url={reel.url}
-                      platform={reel.platform}
-                      shortcode={reel.shortcode}
-                      title={reel.title}
-                      isActive={isCurrent}
-                      autoLoad={isCurrent || isNext}
-                      isMuted={isMuted}
-                      onToggleMute={() => setIsMuted(prev => !prev)}
-                    />
+                  {/* 1. VIDEO PLAYER (100% full screen cover) */}
+                  {isDirectVideo ? (
+                    <div
+                      className="w-full h-full relative cursor-pointer"
+                      onClick={(e) => handleVideoTap(idx, reel, e)}
+                    >
+                      <video
+                        ref={(el) => {
+                          videoRefs.current[idx] = el;
+                        }}
+                        src={reel.url}
+                        poster={reel.thumbnailUrl}
+                        loop
+                        playsInline
+                        muted={isMuted}
+                        className="w-full h-full object-cover select-none"
+                      />
+
+                      {/* Animated Tap Icons (Play / Pause / Bursting Heart) */}
+                      <AnimatePresence>
+                        {centerIconState && centerIconState.index === idx && (
+                          <motion.div
+                            initial={{ scale: 0, opacity: 0 }}
+                            animate={{ scale: 1.2, opacity: 1 }}
+                            exit={{ scale: 1.5, opacity: 0 }}
+                            transition={{ type: 'spring', damping: 15 }}
+                            className="absolute inset-0 flex items-center justify-center pointer-events-none z-30"
+                          >
+                            {centerIconState.type === 'heart' ? (
+                              <div className="flex items-center justify-center p-6 rounded-full bg-black/40 backdrop-blur-md">
+                                <Heart className="h-20 w-20 fill-rose-500 text-rose-500 animate-pulse drop-shadow-[0_4px_20px_rgba(244,63,94,0.8)]" />
+                              </div>
+                            ) : centerIconState.type === 'pause' ? (
+                              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-black/60 backdrop-blur-md">
+                                <Pause className="h-8 w-8 text-white fill-white" />
+                              </div>
+                            ) : (
+                              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-black/60 backdrop-blur-md">
+                                <Play className="h-8 w-8 text-white fill-white translate-x-0.5" />
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  ) : (
+                    /* External Instagram / Facebook Embed Fallback */
+                    <div className="w-full h-full flex items-center justify-center bg-[#070707] p-2">
+                      <ExternalVideoEmbed
+                        url={reel.url}
+                        platform={reel.platform}
+                        shortcode={reel.shortcode}
+                        title={reel.title}
+                        isActive={isActive}
+                        autoLoad={isActive}
+                        isMuted={isMuted}
+                        onToggleMute={() => setIsMuted((prev) => !prev)}
+                      />
+                    </div>
+                  )}
+
+                  {/* 2. RIGHT-SIDE INSTAGRAM ACTION COLUMN */}
+                  <div className="absolute right-3.5 bottom-24 sm:bottom-20 z-30 flex flex-col items-center gap-5 text-white pointer-events-auto">
+                    {/* Like / Heart Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleFavorite(reel);
+                        triggerHeartEffect(e.clientX, e.clientY);
+                      }}
+                      className="group flex flex-col items-center gap-1 transition-transform active:scale-125"
+                      title={reel.isFavorite ? 'Unlike' : 'Like'}
+                    >
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 backdrop-blur-md border border-white/20 group-hover:bg-black/60 transition-all">
+                        <Heart
+                          className={`h-6 w-6 transition-colors ${
+                            reel.isFavorite
+                              ? 'fill-rose-500 text-rose-500'
+                              : 'text-white'
+                          }`}
+                        />
+                      </div>
+                      <span className="text-[11px] font-mono font-medium drop-shadow-md">
+                        {reel.isFavorite ? '1' : 'Like'}
+                      </span>
+                    </button>
+
+                    {/* Comments Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveReel(reel);
+                        setIsCommentsOpen(true);
+                      }}
+                      className="group flex flex-col items-center gap-1 transition-transform active:scale-125"
+                      title="Comments"
+                    >
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 backdrop-blur-md border border-white/20 group-hover:bg-black/60 transition-all">
+                        <MessageCircle className="h-6 w-6 text-white" />
+                      </div>
+                      <span className="text-[11px] font-mono font-medium drop-shadow-md">
+                        {commentsCount > 0 ? commentsCount : 'Comment'}
+                      </span>
+                    </button>
+
+                    {/* Share Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleShareReel(reel);
+                      }}
+                      className="group flex flex-col items-center gap-1 transition-transform active:scale-125"
+                      title="Share Reel"
+                    >
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 backdrop-blur-md border border-white/20 group-hover:bg-black/60 transition-all">
+                        {copiedLink ? (
+                          <Check className="h-5 w-5 text-emerald-400" />
+                        ) : (
+                          <Share2 className="h-5 w-5 text-white" />
+                        )}
+                      </div>
+                      <span className="text-[11px] font-mono font-medium drop-shadow-md">
+                        {copiedLink ? 'Copied' : 'Share'}
+                      </span>
+                    </button>
+
+                    {/* Bookmark / Save Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleFavorite(reel);
+                      }}
+                      className="group flex flex-col items-center gap-1 transition-transform active:scale-125"
+                      title="Save to Sanctuary"
+                    >
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 backdrop-blur-md border border-white/20 group-hover:bg-black/60 transition-all">
+                        <Bookmark
+                          className={`h-5 w-5 transition-colors ${
+                            reel.isFavorite ? 'fill-white text-white' : 'text-white'
+                          }`}
+                        />
+                      </div>
+                      <span className="text-[11px] font-mono font-medium drop-shadow-md">
+                        Save
+                      </span>
+                    </button>
+
+                    {/* Sound Mute/Unmute Toggle */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsMuted((prev) => !prev);
+                      }}
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-md border border-white/20 hover:bg-black/60 transition-all"
+                      title={isMuted ? 'Unmute' : 'Mute'}
+                    >
+                      {isMuted ? (
+                        <VolumeX className="h-4 w-4 text-white" />
+                      ) : (
+                        <Volume2 className="h-4 w-4 text-white" />
+                      )}
+                    </button>
+
+                    {/* More Options (...) */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveReel(reel);
+                        setEditTitle(reel.title || '');
+                        setEditCaption(reel.caption || '');
+                        setEditCategory(reel.category || 'romantic');
+                        setEditIsFavorite(Boolean(reel.isFavorite));
+                        setIsMoreMenuOpen(true);
+                      }}
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-black/30 backdrop-blur-md border border-white/10 hover:bg-black/50 transition-all"
+                      title="More Options"
+                    >
+                      <MoreVertical className="h-4 w-4 text-white/80" />
+                    </button>
                   </div>
 
-                  {/* Metadata & Actions Overlay */}
-                  <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between">
-                    <div className="flex-1 min-w-0 pr-2">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider text-[#AAAAAA] bg-white/5 border border-white/10">
-                          {isInstagram ? 'Instagram' : 'Facebook'}
-                        </span>
-                        <span className="text-[10px] font-mono text-[#777777] capitalize">
-                          {reel.category}
+                  {/* 3. BOTTOM INFORMATION OVERLAY: Creator, Caption, Audio Ticker */}
+                  <div className="absolute inset-x-0 bottom-0 z-20 pt-16 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] px-4 bg-gradient-to-t from-black/95 via-black/50 to-transparent pointer-events-none">
+                    <div className="max-w-[78%] space-y-2 pointer-events-auto">
+                      {/* Creator Row */}
+                      <div className="flex items-center gap-2.5">
+                        <UserAvatar
+                          src={creatorAvatar}
+                          name={creatorName}
+                          size="sm"
+                          className="ring-2 ring-white/30 shadow-lg"
+                        />
+                        <div className="flex items-center gap-2">
+                          <span className="font-serif text-sm font-medium text-white drop-shadow-md">
+                            @{creatorName.toLowerCase().replace(/\s+/g, '')}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-mono tracking-wider bg-white/20 border border-white/20 text-white backdrop-blur-md uppercase">
+                            Sanctuary
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Title & Caption with Expand / Collapse */}
+                      <div className="text-xs text-white/95 leading-relaxed font-light drop-shadow-md">
+                        {reel.title && (
+                          <h4 className="font-medium text-sm text-white mb-0.5 line-clamp-1">
+                            {reel.title}
+                          </h4>
+                        )}
+                        {reel.caption && (
+                          <p className={`text-white/90 ${isCaptionExpanded ? '' : 'line-clamp-2'}`}>
+                            {reel.caption}
+                          </p>
+                        )}
+                        {reel.caption && reel.caption.length > 80 && (
+                          <button
+                            onClick={() =>
+                              setExpandedCaptions((prev) => ({
+                                ...prev,
+                                [reel.id]: !prev[reel.id],
+                              }))
+                            }
+                            className="text-white/70 hover:text-white font-medium text-[11px] underline mt-0.5"
+                          >
+                            {isCaptionExpanded ? 'less' : '...more'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Music & Audio Ticker */}
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <Music2 className="h-3.5 w-3.5 text-rose-300 animate-spin [animation-duration:8s]" />
+                        <span className="text-[11px] font-mono text-white/80 truncate">
+                          {reel.title ? `Original Audio • ${reel.title}` : 'Original Audio • Ray & Desh Sanctuary'}
                         </span>
                       </div>
-                      <h3 className="font-serif text-sm text-white font-medium line-clamp-1">
-                        {reel.title || 'Untitled Reel'}
-                      </h3>
-                      {reel.caption && (
-                        <p className="text-xs text-[#888888] line-clamp-1 font-light">
-                          {reel.caption}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={(e) => handleToggleFavorite(e, reel.id)}
-                        className={`flex h-9 w-9 items-center justify-center rounded-full border transition-all ${
-                          reel.isFavorite
-                            ? 'bg-white text-black border-white shadow-md'
-                            : 'bg-[#181818] border-white/10 text-[#777777] hover:text-white'
-                        }`}
-                      >
-                        <Heart className={`h-4 w-4 ${reel.isFavorite ? 'fill-black text-black' : ''}`} />
-                      </button>
-                      <a
-                        href={reel.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-[#181818] border border-white/10 text-[#AAAAAA] hover:text-white transition-all"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
                     </div>
                   </div>
                 </div>
@@ -519,402 +706,401 @@ export default function ReelsPage() {
             })}
           </div>
 
-          {/* Desktop/Tablet Floating Up/Down Navigation Buttons */}
-          <div className="hidden md:flex flex-col gap-2 absolute -right-14 top-1/2 -translate-y-1/2">
-            <button
-              onClick={() => scrollToReel(activeReelIndex - 1)}
-              disabled={activeReelIndex === 0}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#161616] border border-white/15 text-white disabled:opacity-30 hover:bg-white hover:text-black transition-all shadow-md"
-              title="Previous reel"
-            >
-              <ChevronUp className="h-5 w-5" />
-            </button>
-            <button
-              onClick={() => scrollToReel(activeReelIndex + 1)}
-              disabled={activeReelIndex >= displayedReels.length - 1}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#161616] border border-white/15 text-white disabled:opacity-30 hover:bg-white hover:text-black transition-all shadow-md"
-              title="Next reel"
-            >
-              <ChevronDown className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-      ) : (
-        /* GRID VIEW */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {displayedReels.map((reel) => {
-            const isInstagram = reel.platform === 'instagram';
-            return (
-              <motion.div
-                key={reel.id}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-                className="group relative flex flex-col justify-between rounded-3xl bg-[#101010] border border-white/10 p-4 shadow-[0_12px_30px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.1)] hover:border-white/20 transition-all"
-              >
-                {/* Embedded Video Player */}
-                <div className="w-full mb-4">
-                  <ExternalVideoEmbed
-                    url={reel.url}
-                    platform={reel.platform}
-                    shortcode={reel.shortcode}
-                    title={reel.title}
-                  />
-                </div>
+          {/* SLIDE-UP COMMENTS DRAWER */}
+          <AnimatePresence>
+            {isCommentsOpen && activeReel && (
+              <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setIsCommentsOpen(false)}
+                  className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+                />
 
-                {/* Reel Metadata & Actions */}
-                <div className="flex-1 flex flex-col justify-between space-y-3">
-                  {/* Tags & Favorite Button */}
-                  <div className="flex items-center justify-between gap-2">
+                <motion.div
+                  initial={{ y: '100%' }}
+                  animate={{ y: 0 }}
+                  exit={{ y: '100%' }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+                  className="relative w-full max-w-md bg-[#121212] border-t md:border border-white/10 md:rounded-3xl rounded-t-3xl max-h-[75vh] flex flex-col z-10 overflow-hidden shadow-2xl"
+                >
+                  <div className="flex items-center justify-between p-4 border-b border-white/10">
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider text-[#AAAAAA] bg-white/5 border border-white/10">
-                        {isInstagram ? <InstagramIcon className="h-2.5 w-2.5 text-white" /> : <Film className="h-2.5 w-2.5 text-white" />}
-                        {reel.platform}
-                      </span>
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-mono capitalize text-[#888888] bg-black/40 border border-white/5">
-                        {reel.category}
-                      </span>
+                      <MessageCircle className="h-4 w-4 text-white" />
+                      <h3 className="font-serif text-sm font-medium text-white">Comments</h3>
                     </div>
-
                     <button
-                      onClick={(e) => handleToggleFavorite(e, reel.id)}
-                      aria-label="Toggle Favorite"
-                      className={`flex h-8 w-8 items-center justify-center rounded-full border transition-all ${
-                        reel.isFavorite
-                          ? 'bg-white text-black border-white shadow-[0_2px_10px_rgba(255,255,255,0.3)]'
-                          : 'bg-[#181818] border-white/10 text-[#666666] hover:text-white hover:border-white/20'
-                      }`}
+                      onClick={() => setIsCommentsOpen(false)}
+                      className="p-1 rounded-full text-white/70 hover:text-white"
                     >
-                      <Heart
-                        className={`h-3.5 w-3.5 ${reel.isFavorite ? 'fill-black text-black' : ''}`}
-                      />
+                      <X className="h-5 w-5" />
                     </button>
                   </div>
 
-                  {/* Title & Caption */}
-                  <div>
-                    <h3 className="font-serif text-base text-white font-normal line-clamp-1">
-                      {reel.title || 'Untitled Reel'}
-                    </h3>
-                    {reel.caption && (
-                      <p className="mt-1 text-xs text-[#777777] font-light leading-relaxed line-clamp-2">
-                        {reel.caption}
-                      </p>
+                  {/* Comments List */}
+                  <div className="flex-1 p-4 overflow-y-auto space-y-3.5 max-h-[45vh]">
+                    {(reelComments[activeReel.id] || []).length === 0 ? (
+                      <div className="text-center py-8 text-white/50 text-xs">
+                        No comments yet. Be the first to leave a little sweet note! ❤️
+                      </div>
+                    ) : (
+                      reelComments[activeReel.id].map((comm) => (
+                        <div key={comm.id} className="flex items-start gap-3">
+                          <UserAvatar src={comm.avatar} name={comm.name} size="xs" />
+                          <div className="flex-1">
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-xs font-medium text-white">{comm.name}</span>
+                              <span className="text-[10px] text-white/40">{comm.time}</span>
+                            </div>
+                            <p className="text-xs text-white/80 mt-0.5">{comm.text}</p>
+                          </div>
+                        </div>
+                      ))
                     )}
                   </div>
 
-                  {/* Footer Info & Actions */}
-                  <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-[#666666]">
-                    <div className="flex items-center gap-1 font-mono">
-                      <Calendar className="h-3 w-3 text-[#555555]" />
-                      <span>{formatDate(reel.savedAt)}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <a
-                        href={reel.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={`Watch on ${reel.platform}`}
-                        className="p-1.5 rounded-xl bg-[#161616] border border-white/10 text-[#AAAAAA] hover:text-white hover:border-white/20 transition-all"
-                        title={`Watch on ${isInstagram ? 'Instagram' : 'Facebook'}`}
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                      <button
-                        onClick={() => openEditModal(reel)}
-                        aria-label="Edit details"
-                        className="p-1.5 rounded-xl bg-[#161616] border border-white/10 text-[#AAAAAA] hover:text-white hover:border-white/20 transition-all"
-                        title="Edit title & caption"
-                      >
-                        <Edit3 className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={() => openDeleteModal(reel)}
-                        aria-label="Remove reel"
-                        className="p-1.5 rounded-xl bg-[#161616] border border-white/10 text-[#AAAAAA] hover:text-white hover:border-white/20 transition-all"
-                        title="Remove from gallery"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
+                  {/* Comment Input */}
+                  <div className="p-3 border-t border-white/10 bg-[#0E0E0E] flex items-center gap-2">
+                    <UserAvatar src={user.avatar} name={user.name} size="xs" />
+                    <input
+                      type="text"
+                      placeholder={`Add a sweet comment as ${user.name}...`}
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleAddComment(activeReel.id);
+                        }
+                      }}
+                      className="flex-1 bg-[#1A1A1A] border border-white/10 rounded-full px-3.5 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-white/30"
+                    />
+                    <button
+                      onClick={() => handleAddComment(activeReel.id)}
+                      disabled={!commentText.trim()}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-black disabled:opacity-40 transition-all"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                    </button>
                   </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* CATEGORIES SELECTION SHEET */}
+          <AnimatePresence>
+            {isCategorySheetOpen && (
+              <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setIsCategorySheetOpen(false)}
+                  className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+                />
+
+                <motion.div
+                  initial={{ y: '100%' }}
+                  animate={{ y: 0 }}
+                  exit={{ y: '100%' }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+                  className="relative w-full max-w-sm bg-[#121212] border-t md:border border-white/10 md:rounded-3xl rounded-t-3xl p-5 z-10 shadow-2xl"
+                >
+                  <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-3">
+                    <h3 className="font-serif text-base text-white">Filter Reels Category</h3>
+                    <button onClick={() => setIsCategorySheetOpen(false)} className="text-white/60 hover:text-white">
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {CATEGORIES.map((cat) => {
+                      const isSelected = selectedCategory === cat.value;
+                      return (
+                        <button
+                          key={cat.value}
+                          onClick={() => {
+                            setSelectedCategory(cat.value);
+                            setIsCategorySheetOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between p-3 rounded-2xl text-xs transition-all ${
+                            isSelected
+                              ? 'bg-white text-black font-medium shadow-md'
+                              : 'bg-[#181818] text-white/80 hover:bg-[#202020]'
+                          }`}
+                        >
+                          <span>{cat.label}</span>
+                          {isSelected && <Check className="h-4 w-4 text-black" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* MORE OPTIONS SHEET */}
+          <AnimatePresence>
+            {isMoreMenuOpen && activeReel && (
+              <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setIsMoreMenuOpen(false)}
+                  className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+                />
+
+                <motion.div
+                  initial={{ y: '100%' }}
+                  animate={{ y: 0 }}
+                  exit={{ y: '100%' }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+                  className="relative w-full max-w-sm bg-[#121212] border-t md:border border-white/10 md:rounded-3xl rounded-t-3xl p-5 z-10 shadow-2xl space-y-2"
+                >
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(activeReel.url);
+                      setCopiedLink(true);
+                      setIsMoreMenuOpen(false);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                    }}
+                    className="w-full flex items-center gap-3 p-3 rounded-2xl bg-[#181818] text-xs text-white hover:bg-[#222222]"
+                  >
+                    <Copy className="h-4 w-4" />
+                    <span>Copy Video URL</span>
+                  </button>
+
+                  <a
+                    href={activeReel.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center gap-3 p-3 rounded-2xl bg-[#181818] text-xs text-white hover:bg-[#222222]"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    <span>Open Original Source</span>
+                  </a>
+
+                  <button
+                    onClick={() => {
+                      setIsMoreMenuOpen(false);
+                      setIsEditModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-3 p-3 rounded-2xl bg-[#181818] text-xs text-white hover:bg-[#222222]"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                    <span>Edit Reel Details</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setIsMoreMenuOpen(false);
+                      setIsDeleteModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-3 p-3 rounded-2xl bg-rose-500/10 text-rose-400 text-xs hover:bg-rose-500/20"
+                  >
+                    <Trash2 className="h-4 w-4 text-rose-400" />
+                    <span>Delete from Sanctuary</span>
+                  </button>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* ADD REEL MODAL */}
+          <Modal
+            isOpen={isAddModalOpen}
+            onClose={() => setIsAddModalOpen(false)}
+            title="Save a Romantic Reel"
+          >
+            <form onSubmit={handleAddReel} className="space-y-4">
+              <div className="flex items-center gap-2 pb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddModalOpen(false);
+                    setIsMediaPickerOpen(true);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-2xl bg-[#1A1A1A] border border-white/10 text-xs text-white hover:bg-[#222222] transition-all"
+                >
+                  <Images className="h-4 w-4 text-rose-400" />
+                  <span>Choose from Our Media Library</span>
+                </button>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-mono text-[#888888] uppercase block mb-1">
+                  Video URL or Reel Link *
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://www.instagram.com/reel/... or Cloudinary URL"
+                  value={newUrl}
+                  onChange={(e) => setNewUrl(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#141414] border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-white/30"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-mono text-[#888888] uppercase block mb-1">
+                  Title (optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. A Song That Reminds Me of You"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#141414] border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-white/30"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-mono text-[#888888] uppercase block mb-1">
+                  Caption (optional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Add a sweet little message..."
+                  value={newCaption}
+                  onChange={(e) => setNewCaption(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#141414] border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-white/30"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-[11px] font-mono text-[#888888] uppercase block mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-[#141414] border border-white/10 text-xs text-white focus:outline-none focus:border-white/30"
+                  >
+                    <option value="romantic">Romantic</option>
+                    <option value="memories">Memories</option>
+                    <option value="travel">Travel</option>
+                    <option value="dreams">Dreams</option>
+                  </select>
                 </div>
-              </motion.div>
-            );
-          })}
+              </div>
+
+              {addError && (
+                <p className="text-xs text-rose-400 bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
+                  {addError}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 rounded-2xl bg-[#181818] text-xs text-white/70 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 rounded-2xl bg-white text-black text-xs font-medium hover:scale-105 active:scale-95 disabled:opacity-50 transition-all shadow-md"
+                >
+                  {isSubmitting ? 'Saving...' : 'Save Reel'}
+                </button>
+              </div>
+            </form>
+          </Modal>
+
+          {/* EDIT REEL MODAL */}
+          <Modal
+            isOpen={isEditModalOpen}
+            onClose={() => setIsEditModalOpen(false)}
+            title="Edit Reel Details"
+          >
+            <form onSubmit={handleUpdateReel} className="space-y-4">
+              <div>
+                <label className="text-[11px] font-mono text-[#888888] uppercase block mb-1">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#141414] border border-white/10 text-xs text-white focus:outline-none focus:border-white/30"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-mono text-[#888888] uppercase block mb-1">
+                  Caption
+                </label>
+                <textarea
+                  rows={2}
+                  value={editCaption}
+                  onChange={(e) => setEditCaption(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-[#141414] border border-white/10 text-xs text-white focus:outline-none focus:border-white/30"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 rounded-2xl bg-[#181818] text-xs text-white/70"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 rounded-2xl bg-white text-black text-xs font-medium"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </Modal>
+
+          {/* DELETE CONFIRMATION MODAL */}
+          <Modal
+            isOpen={isDeleteModalOpen}
+            onClose={() => setIsDeleteModalOpen(false)}
+            title="Remove Reel from Sanctuary"
+          >
+            <div className="space-y-4">
+              <p className="text-xs text-white/70">
+                Are you sure you want to remove this reel from our private gallery?
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  className="px-4 py-2 rounded-2xl bg-[#181818] text-xs text-white/70"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteReel}
+                  disabled={isSubmitting}
+                  className="px-5 py-2 rounded-2xl bg-rose-500 text-white text-xs font-medium"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </Modal>
+
+          {/* PICK FROM MEDIA LIBRARY MODAL */}
+          <MediaPickerModal
+            isOpen={isMediaPickerOpen}
+            onClose={() => setIsMediaPickerOpen(false)}
+            onSelect={handleSelectFromLibrary}
+            allowedMediaType="video"
+            title="Pick from Our Media Library"
+          />
         </div>
       )}
-
-      {/* 4. Privacy & Playback Technical Note Banner */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-[#0D0D0D] border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-[#777777] font-light">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white/5 border border-white/10 text-white">
-            <ShieldCheck className="h-4 w-4" />
-          </div>
-          <div>
-            <span className="font-medium text-[#E5E5E5] block">Privacy &amp; Embedded Content Notice</span>
-            <span>
-              All original source links are stored in our private sanctuary database. Playback is streamed directly from official Instagram/Facebook servers via iframe embeds.
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* MODAL 1: Add Reel */}
-      <Modal
-        isOpen={isAddModalOpen}
-        onClose={() => {
-          setIsAddModalOpen(false);
-          setAddError(null);
-          setAddSuccess(null);
-        }}
-        title="Add to Our Reels"
-        description="Paste an Instagram Reel, Instagram post, or Facebook video link to save it forever."
-      >
-        <form onSubmit={handleAddReel} className="space-y-4">
-          {addError && (
-            <div className="p-3 rounded-2xl bg-white/5 border border-white/20 text-xs text-white flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 text-white" />
-              <span>{addError}</span>
-            </div>
-          )}
-
-          {addSuccess && (
-            <div className="p-3 rounded-2xl bg-white/10 border border-white/30 text-xs text-white flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-white" />
-              <span>{addSuccess}</span>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-mono uppercase text-[#AAAAAA] mb-1.5">
-              Source URL <span className="text-white">*</span>
-            </label>
-            <input
-              type="url"
-              required
-              value={newUrl}
-              onChange={(e) => {
-                setNewUrl(e.target.value);
-                setAddError(null);
-              }}
-              placeholder="https://www.instagram.com/reel/DeOofwmCelo/..."
-              className="w-full px-3.5 py-2.5 rounded-2xl bg-[#141414] border border-white/10 text-xs text-white placeholder-[#555555] focus:outline-none focus:border-white/30 transition-all font-mono"
-            />
-            <p className="mt-1 text-[11px] text-[#666666]">
-              Paste the full URL including query parameters.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono uppercase text-[#AAAAAA] mb-1.5">
-              Title <span className="text-[#666666]">(Optional)</span>
-            </label>
-            <input
-              type="text"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="e.g. Late night dance in the rain"
-              className="w-full px-3.5 py-2.5 rounded-2xl bg-[#141414] border border-white/10 text-xs text-white placeholder-[#555555] focus:outline-none focus:border-white/30 transition-all"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono uppercase text-[#AAAAAA] mb-1.5">
-              Personal Caption <span className="text-[#666666]">(Optional)</span>
-            </label>
-            <textarea
-              rows={2}
-              value={newCaption}
-              onChange={(e) => setNewCaption(e.target.value)}
-              placeholder="Write a sweet note or why this video reminds you of us..."
-              className="w-full px-3.5 py-2.5 rounded-2xl bg-[#141414] border border-white/10 text-xs text-white placeholder-[#555555] focus:outline-none focus:border-white/30 transition-all resize-none"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-mono uppercase text-[#AAAAAA] mb-1.5">
-                Category
-              </label>
-              <select
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-2xl bg-[#141414] border border-white/10 text-xs text-white focus:outline-none focus:border-white/30 transition-all"
-              >
-                <option value="romantic">Romantic</option>
-                <option value="memories">Memories</option>
-                <option value="dates">Dates</option>
-                <option value="trips">Trips</option>
-                <option value="funny">Funny &amp; Silly</option>
-              </select>
-            </div>
-
-            <div className="flex flex-col justify-end pb-1">
-              <label className="flex items-center gap-2 cursor-pointer p-2 rounded-2xl bg-[#141414] border border-white/10 hover:border-white/20 transition-all">
-                <input
-                  type="checkbox"
-                  checked={newIsFavorite}
-                  onChange={(e) => setNewIsFavorite(e.target.checked)}
-                  className="rounded border-white/20 bg-black text-white focus:ring-0"
-                />
-                <span className="text-xs text-[#CCCCCC]">Mark as Favorite</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-white/10">
-            <button
-              type="button"
-              onClick={() => setIsAddModalOpen(false)}
-              className="px-4 py-2 rounded-xl bg-[#161616] border border-white/10 text-xs text-[#888888] hover:text-white transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2 rounded-xl bg-white text-black text-xs font-medium hover:bg-[#E5E5E5] transition-all disabled:opacity-50"
-            >
-              {isSubmitting ? 'Saving...' : 'Save Reel'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* MODAL 2: Edit Reel Details */}
-      <Modal
-        isOpen={isEditModalOpen}
-        onClose={() => {
-          setIsEditModalOpen(false);
-          setActiveReel(null);
-        }}
-        title="Edit Reel Details"
-        description="Update your custom title, caption, or category for this reel."
-      >
-        <form onSubmit={handleEditSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-mono uppercase text-[#AAAAAA] mb-1.5">
-              Title
-            </label>
-            <input
-              type="text"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              placeholder="e.g. Sweet moment together"
-              className="w-full px-3.5 py-2.5 rounded-2xl bg-[#141414] border border-white/10 text-xs text-white placeholder-[#555555] focus:outline-none focus:border-white/30 transition-all"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono uppercase text-[#AAAAAA] mb-1.5">
-              Personal Caption
-            </label>
-            <textarea
-              rows={3}
-              value={editCaption}
-              onChange={(e) => setEditCaption(e.target.value)}
-              placeholder="Add your thoughts or memory note..."
-              className="w-full px-3.5 py-2.5 rounded-2xl bg-[#141414] border border-white/10 text-xs text-white placeholder-[#555555] focus:outline-none focus:border-white/30 transition-all resize-none"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-mono uppercase text-[#AAAAAA] mb-1.5">
-                Category
-              </label>
-              <select
-                value={editCategory}
-                onChange={(e) => setEditCategory(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-2xl bg-[#141414] border border-white/10 text-xs text-white focus:outline-none focus:border-white/30 transition-all"
-              >
-                <option value="romantic">Romantic</option>
-                <option value="memories">Memories</option>
-                <option value="dates">Dates</option>
-                <option value="trips">Trips</option>
-                <option value="funny">Funny &amp; Silly</option>
-              </select>
-            </div>
-
-            <div className="flex flex-col justify-end pb-1">
-              <label className="flex items-center gap-2 cursor-pointer p-2 rounded-2xl bg-[#141414] border border-white/10 hover:border-white/20 transition-all">
-                <input
-                  type="checkbox"
-                  checked={editIsFavorite}
-                  onChange={(e) => setEditIsFavorite(e.target.checked)}
-                  className="rounded border-white/20 bg-black text-white focus:ring-0"
-                />
-                <span className="text-xs text-[#CCCCCC]">Favorite</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-white/10">
-            <button
-              type="button"
-              onClick={() => setIsEditModalOpen(false)}
-              className="px-4 py-2 rounded-xl bg-[#161616] border border-white/10 text-xs text-[#888888] hover:text-white transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl bg-white text-black text-xs font-medium hover:bg-[#E5E5E5] transition-all"
-            >
-              Update Reel
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* MODAL 3: Delete Confirmation */}
-      <Modal
-        isOpen={isDeleteModalOpen}
-        onClose={() => {
-          setIsDeleteModalOpen(false);
-          setActiveReel(null);
-        }}
-        title="Remove Reel from Gallery?"
-        description="Are you sure you want to remove this video from our shared gallery? This can't be undone."
-      >
-        <div className="space-y-4 pt-2">
-          {activeReel && (
-            <div className="p-3.5 rounded-2xl bg-[#141414] border border-white/10 text-xs space-y-1">
-              <div className="font-serif text-white">{activeReel.title || 'Untitled Reel'}</div>
-              <div className="font-mono text-[#777777] truncate">{activeReel.url}</div>
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
-            <button
-              onClick={() => setIsDeleteModalOpen(false)}
-              className="px-4 py-2 rounded-xl bg-[#161616] border border-white/10 text-xs text-[#888888] hover:text-white transition-all"
-            >
-              Keep Reel
-            </button>
-            <button
-              onClick={handleDeleteConfirm}
-              className="px-4 py-2 rounded-xl bg-white text-black text-xs font-medium hover:bg-[#E5E5E5] transition-all"
-            >
-              Confirm Remove
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Media Library Picker Modal */}
-      <MediaPickerModal
-        isOpen={isMediaPickerOpen}
-        onClose={() => setIsMediaPickerOpen(false)}
-        onSelect={handleSelectFromLibrary}
-        multiple
-        allowedMediaType="video"
-        defaultCategory="reels"
-        title="Choose Video from Our Media Library"
-        description="Select any uploaded video or reel from our centralized sanctuary library"
-      />
     </div>
   );
 }

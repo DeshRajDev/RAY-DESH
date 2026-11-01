@@ -60,6 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const isChat = pathname === '/chat';
+  const isReels = pathname === '/reels';
 
   useEffect(() => {
     // Avoid premature redirect if token exists in localStorage (waiting for hydration)
@@ -117,12 +118,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Main View Area */}
       <div className="relative flex flex-1 flex-col overflow-hidden min-w-0">
-        <Header />
+        {!isReels && <Header />}
 
         <main
           className={cn(
             'flex-1 min-h-0 w-full',
-            isChat
+            isReels
+              ? 'overflow-hidden flex flex-col p-0 h-full w-full bg-black'
+              : isChat
               ? 'overflow-hidden flex flex-col pb-16 md:pb-0'
               : 'overflow-y-auto pb-24 md:pb-12'
           )}

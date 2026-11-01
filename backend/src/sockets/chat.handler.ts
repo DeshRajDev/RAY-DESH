@@ -79,23 +79,20 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
       // Broadcast to partner in the couple room
       socket.to(roomName).emit('message:new', messageJson);
 
-      // Broadcast updated unread count for partner
-      Message.countDocuments({ coupleId: couple.id, receiverId, isRead: false })
-        .then((unreadCount: number) => {
-          socket.to(roomName).emit('unread:count', {
-            userId: receiverId.toString(),
-            count: unreadCount,
-          });
-        })
-        .catch(() => {});
+      // Calculate and broadcast updated unread count for partner
+      const unreadCount = await Message.countDocuments({ coupleId: couple.id, receiverId, isRead: false });
+      socket.to(roomName).emit('unread:count', {
+        userId: receiverId.toString(),
+        count: unreadCount,
+      });
 
-      // Trigger Web Push notification in background
+      // Trigger Web Push notification in background with accurate unreadCount
       const { sendPushToUser } = require('../services/push.service');
       sendPushToUser(receiverId, {
         title: user.name ? `${user.name} • Ray` : 'Ray',
         body: type === 'image' ? '📷 Sent a photo' : type === 'video' ? '📹 Sent a video' : content || 'New message',
         url: '/chat',
-        data: { messageId: messageJson.id, type: 'chat' },
+        data: { messageId: messageJson.id, type: 'chat', unreadCount },
       }).catch((err: any) => logger.warn('Push delivery warning:', err?.message));
 
       if (typeof callback === 'function') {

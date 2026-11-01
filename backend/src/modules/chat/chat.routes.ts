@@ -92,18 +92,29 @@ router.post('/messages', authenticate, requireCouple, async (req: AuthenticatedR
 
     const messageJson = message.toJSON();
 
+    // Accurately calculate database unread count for the receiver
+    const unreadCount = await Message.countDocuments({
+      coupleId: couple.id,
+      receiverId,
+      isRead: false,
+    });
+
     const io = getSocketIo();
     if (io) {
       io.to(`couple:${couple.id}`).emit('message:new', messageJson);
+      io.to(`couple:${couple.id}`).emit('unread:count', {
+        userId: receiverId.toString(),
+        count: unreadCount,
+      });
     }
 
-    // Trigger Web Push notification in background
+    // Trigger Web Push notification in background with unread count & message tag
     const { sendPushToUser } = require('../../services/push.service');
     sendPushToUser(receiverId, {
       title: req.user?.name ? `${req.user.name} • Ray` : 'Ray',
       body: type === 'image' ? '📷 Sent a photo' : type === 'video' ? '📹 Sent a video' : content || 'New message',
       url: '/chat',
-      data: { messageId: messageJson.id, type: 'chat' },
+      data: { messageId: messageJson.id, type: 'chat', unreadCount },
     }).catch((err: any) => console.warn('Push delivery warning:', err?.message));
 
     return sendSuccess(res, messageJson, 'Message sent', 201);

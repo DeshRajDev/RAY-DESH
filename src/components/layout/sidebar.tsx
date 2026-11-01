@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { chatService } from '@/services/chat.service';
 import { 
   Home, 
   MessageCircle, 
@@ -58,6 +59,15 @@ const iconMap: Record<string, any> = {
 export function Sidebar() {
   const pathname = usePathname();
   const { user, partner, theme, toggleTheme, setIsCommandPaletteOpen, triggerHeartEffect } = useApp();
+  const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
+
+  useEffect(() => {
+    chatService.fetchUnreadCount();
+    const unsub = chatService.subscribeUnread((count) => {
+      setUnreadChatCount(count);
+    });
+    return unsub;
+  }, []);
 
   return (
     <aside className="hidden md:flex md:w-64 lg:w-72 flex-col justify-between border-r border-white/10 bg-[#070707] p-5 shrink-0 select-none z-30">
@@ -128,7 +138,11 @@ export function Sidebar() {
                 <Icon className={`h-4 w-4 ${isActive ? 'text-black' : 'text-[#777777]'}`} />
                 <span>{item.title}</span>
               </div>
-              {item.badge && (
+              {item.href === '/chat' && unreadChatCount > 0 ? (
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-rose-500 text-white shadow-sm ring-1 ring-black">
+                  {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                </span>
+              ) : item.badge ? (
                 <span
                   className={`rounded-full px-2 py-0.5 text-[10px] font-mono ${
                     isActive
@@ -138,7 +152,7 @@ export function Sidebar() {
                 >
                   {item.badge}
                 </span>
-              )}
+              ) : null}
             </Link>
           );
         })}

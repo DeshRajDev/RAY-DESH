@@ -140,21 +140,44 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  const options = {
-    body: data.body,
-    icon: data.icon || '/icons/icon-192.png',
-    badge: data.badge || '/icons/icon-192.png',
-    data: {
-      url: data.url || '/chat',
-      ...data.data,
-    },
-    vibrate: [100, 50, 100],
-    tag: (data.data && data.data.messageId) || 'ray-notification',
-    renotify: true,
-  };
+  // 1. Update Native App Badge in Background/ServiceWorker scope
+  const unreadCount = data.data && typeof data.data.unreadCount === 'number' ? data.data.unreadCount : undefined;
+  if (typeof unreadCount === 'number' && 'setAppBadge' in self.navigator) {
+    if (unreadCount > 0) {
+      self.navigator.setAppBadge(unreadCount).catch(() => {});
+    } else {
+      self.navigator.clearAppBadge().catch(() => {});
+    }
+  }
 
+  // 2. Check open windows to prevent duplicate notification if user is actively in chat
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Ray', options)
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      const isChatFocused = clientList.some(
+        (client) => client.visibilityState === 'visible' && client.focused && client.url.includes('/chat')
+      );
+
+      if (isChatFocused) {
+        // User is currently chatting; do not spam an OS banner
+        return;
+      }
+
+      const messageId = data.data && data.data.messageId;
+      const options = {
+        body: data.body,
+        icon: data.icon || '/icons/icon-192.png',
+        badge: data.badge || '/icons/icon-192.png',
+        data: {
+          url: data.url || '/chat',
+          ...data.data,
+        },
+        vibrate: [100, 50, 100],
+        tag: messageId ? `msg-${messageId}` : 'ray-chat-notification',
+        renotify: true,
+      };
+
+      return self.registration.showNotification(data.title || 'Ray', options);
+    })
   );
 });
 
@@ -167,6 +190,12 @@ self.addEventListener('notificationclick', (event) => {
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if (client.url.includes(targetUrl) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      for (const client of clientList) {
+        if ('focus' in client && 'navigate' in client) {
+          client.navigate(targetUrl);
           return client.focus();
         }
       }

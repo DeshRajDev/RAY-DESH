@@ -105,6 +105,7 @@ export default function ChatPage() {
     chatService.getPartnerPresence(partner.id)
   );
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
 
   // Wallpaper State
   const [wallpaper, setWallpaper] = useState<ChatWallpaper>(() => chatService.getWallpaper());
@@ -145,6 +146,10 @@ export default function ChatPage() {
       setMessages(updated);
     });
 
+    const unsubUnread = chatService.subscribeUnread(count => {
+      setUnreadChatCount(count);
+    });
+
     // Load initial messages and latest partner presence from backend
     chatService.fetchPartnerPresence().then(p => {
       if (p) setPartnerPresence(p);
@@ -165,8 +170,14 @@ export default function ChatPage() {
       unsubTyping();
       unsubWallpaper();
       unsubMessages();
+      unsubUnread();
     };
   }, [user.id, partner.id]);
+
+  const latestMessage = useMemo(() => {
+    if (messages.length === 0) return null;
+    return messages[messages.length - 1];
+  }, [messages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -364,6 +375,95 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-1 min-h-0 w-full overflow-hidden bg-[#070707] relative">
+      {/* WHATSAPP-STYLE CONVERSATION LIST SIDEBAR */}
+      <div className="hidden md:flex flex-col w-72 lg:w-80 shrink-0 border-r border-white/10 bg-[#0A0A0A]">
+        {/* Header */}
+        <div className="h-16 px-4 flex items-center justify-between border-b border-white/10 bg-[#0E0E0E]">
+          <div className="flex items-center gap-2.5">
+            <UserAvatar src={user.avatar} name={user.name} size="sm" />
+            <h2 className="font-serif text-sm font-medium text-white">Chats</h2>
+          </div>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-[#777777] bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+            Sanctuary
+          </span>
+        </div>
+
+        {/* Conversation Item */}
+        <div className="p-2 space-y-1 overflow-y-auto">
+          <div
+            onClick={() => {
+              chatService.setChatViewActive(true);
+              const unreadIds = messages
+                .filter((m) => m.receiverId === user.id && !m.isRead)
+                .map((m) => m.id);
+              if (unreadIds.length > 0) {
+                chatService.markAsRead(unreadIds);
+              }
+            }}
+            className="group flex items-center gap-3 p-3 rounded-2xl bg-white/10 border border-white/10 cursor-pointer shadow-sm transition-all"
+          >
+            <UserAvatar
+              src={partner.avatar}
+              name={partner.name}
+              size="md"
+              isOnline={partnerPresence.isOnline}
+              showOnlineBadge={true}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <h4 className="font-serif text-sm font-medium text-white truncate">
+                  {partner.name}
+                </h4>
+                {latestMessage && (
+                  <span className="text-[10px] font-mono text-[#777777]">
+                    {formatTime(latestMessage.createdAt)}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center justify-between mt-0.5">
+                <div className="flex items-center gap-1 text-xs text-[#888888] truncate max-w-[170px]">
+                  {isPartnerTyping ? (
+                    <span className="text-emerald-400 font-medium italic">typing...</span>
+                  ) : latestMessage ? (
+                    <>
+                      {latestMessage.senderId === user.id && (
+                        <span>
+                          {latestMessage.status === 'read' || latestMessage.isRead ? (
+                            <CheckCheck className="h-3 w-3 text-sky-400 shrink-0 inline" />
+                          ) : latestMessage.status === 'delivered' || latestMessage.isDelivered ? (
+                            <CheckCheck className="h-3 w-3 text-[#777777] shrink-0 inline" />
+                          ) : (
+                            <Check className="h-3 w-3 text-[#777777] shrink-0 inline" />
+                          )}
+                        </span>
+                      )}
+                      <span className="truncate font-light text-white/80">
+                        {latestMessage.type === 'voice'
+                          ? '🎤 Voice message'
+                          : latestMessage.type === 'image'
+                          ? '📷 Photo'
+                          : latestMessage.type === 'video'
+                          ? '📹 Video'
+                          : latestMessage.content}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-[#666666] italic">No messages yet</span>
+                  )}
+                </div>
+
+                {/* Red Circular Unread Badge */}
+                {unreadChatCount > 0 && (
+                  <span className="flex h-5 min-w-[20px] px-1.5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white shadow-sm ring-1 ring-black">
+                    {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Main Chat Column */}
       <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden border-r border-white/5">
         {/* Chat Top Header */}
