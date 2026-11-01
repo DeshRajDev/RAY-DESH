@@ -261,6 +261,23 @@ class AuthService {
     return this.isSessionActive;
   }
 
+  public async ensureToken(): Promise<string | null> {
+    const api = ApiClient.getInstance();
+    let token = api.getToken();
+    if (token) return token;
+
+    try {
+      const activeAccount = this.activeUserId === 'user_2' ? ACCOUNTS.rey : ACCOUNTS.desh;
+      const res = await this.loginWithCredentials(activeAccount.phoneNumber, activeAccount.defaultPassword);
+      if (res.success) {
+        return api.getToken();
+      }
+    } catch {
+      // ignore
+    }
+    return api.getToken();
+  }
+
   public async switchUser(userId: 'user_1' | 'user_2'): Promise<User> {
     this.activeUserId = userId;
     if (typeof window !== 'undefined') {

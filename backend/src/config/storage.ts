@@ -11,14 +11,24 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Configure Cloudinary if credentials provided
-if (env.STORAGE_PROVIDER === 'cloudinary' && env.CLOUDINARY_CLOUD_NAME) {
-  cloudinary.config({
-    cloud_name: env.CLOUDINARY_CLOUD_NAME,
-    api_key: env.CLOUDINARY_API_KEY,
-    api_secret: env.CLOUDINARY_API_SECRET,
-    secure: true,
-  });
+// Configure Cloudinary if credentials or CLOUDINARY_URL provided
+const hasCloudinary = Boolean(
+  (env.STORAGE_PROVIDER === 'cloudinary' && env.CLOUDINARY_CLOUD_NAME) ||
+  (env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY) ||
+  process.env.CLOUDINARY_URL
+);
+
+if (hasCloudinary) {
+  if (process.env.CLOUDINARY_URL) {
+    cloudinary.config();
+  } else {
+    cloudinary.config({
+      cloud_name: env.CLOUDINARY_CLOUD_NAME,
+      api_key: env.CLOUDINARY_API_KEY,
+      api_secret: env.CLOUDINARY_API_SECRET,
+      secure: true,
+    });
+  }
   logger.info('☁️ Cloudinary storage configured.');
 }
 
@@ -33,32 +43,26 @@ const storage = multer.diskStorage({
   },
 });
 
-const allowedMimes = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'video/mp4',
-  'video/quicktime',
-  'video/webm',
-  'audio/mpeg',
-  'audio/mp3',
-  'audio/wav',
-  'audio/ogg',
-  'audio/webm',
-];
-
 export const upload = multer({
   storage,
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB max file size for high-def reels & photos
+    fileSize: 150 * 1024 * 1024, // 150MB max file size for high-def reels & photos
     files: 30, // Up to 30 files in a single bulk batch
   },
   fileFilter: (_req, file, cb) => {
-    if (allowedMimes.includes(file.mimetype)) {
+    // Broad acceptance for mobile phones (including iPhone HEIC/HEIF/DNG, Android, MOV, MP4, etc.)
+    const isMedia =
+      file.mimetype.startsWith('image/') ||
+      file.mimetype.startsWith('video/') ||
+      file.mimetype.startsWith('audio/') ||
+      /\.(jpg|jpeg|png|webp|gif|heic|heif|dng|avif|mp4|mov|quicktime|webm|mkv|3gp|mp3|wav|ogg|m4a)$/i.test(
+        file.originalname
+      );
+
+    if (isMedia) {
       cb(null, true);
     } else {
-      cb(new Error(`Unsupported file MIME type: ${file.mimetype}`));
+      cb(new Error(`Unsupported file type: ${file.mimetype} (${file.originalname})`));
     }
   },
 });
@@ -78,7 +82,7 @@ export interface UploadResult {
 export async function processUploadedFile(file: Express.Multer.File): Promise<UploadResult> {
   const isVideo = file.mimetype.startsWith('video');
 
-  if (env.STORAGE_PROVIDER === 'cloudinary' && env.CLOUDINARY_CLOUD_NAME) {
+  if (hasCloudinary) {
     try {
       const result = await cloudinary.uploader.upload(file.path, {
         resource_type: isVideo ? 'video' : 'auto',

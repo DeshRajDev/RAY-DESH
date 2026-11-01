@@ -1,5 +1,6 @@
 import { MediaAsset, ApiResponse, MediaSectionCategory } from '@/types';
-import { ApiClient } from './api/client';
+import { ApiClient, API_BASE_URL } from './api/client';
+import { authService } from './auth.service';
 
 const MEDIA_CACHE_KEY = 'sanctuary_media_assets_v1';
 
@@ -134,19 +135,28 @@ class MediaService {
       xhr.onabort = () => reject(new Error('Upload cancelled'));
 
       // Configure URL and headers
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+      const baseUrl = API_BASE_URL;
       xhr.open('POST', `${baseUrl}/media/upload`);
 
-      // Authentication token
-      const token =
-        (typeof window !== 'undefined' &&
-          (localStorage.getItem('couple_auth_token') || localStorage.getItem('auth_token'))) ||
-        '';
-      if (token) {
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      }
+      // Authentication token with auto-recovery if missing or expired
+      (async () => {
+        let token =
+          (typeof window !== 'undefined' &&
+            (localStorage.getItem('couple_auth_token') || localStorage.getItem('auth_token'))) ||
+          '';
 
-      xhr.send(formData);
+        if (!token) {
+          token = (await authService.ensureToken()) || '';
+        }
+
+        if (token) {
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        }
+
+        xhr.send(formData);
+      })().catch((err) => {
+        reject(new Error(err?.message || 'Authentication error during upload'));
+      });
     });
 
     return {

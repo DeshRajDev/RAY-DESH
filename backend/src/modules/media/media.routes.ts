@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { authenticate } from '../../middleware/authenticate';
 import { requireCouple } from '../../middleware/authorize';
 import { AuthenticatedRequest } from '../../types';
@@ -66,11 +66,21 @@ async function syncReelForAsset(asset: any, coupleId: string, userId: string, us
   }
 }
 
-// POST upload single media file with categories & tags
-router.post('/upload', authenticate, requireCouple, upload.single('file'), async (req: AuthenticatedRequest, res: Response) => {
+// GET upload endpoint status helper
+router.get('/upload', (_req: Request, res: Response) => {
+  return res.status(200).json({
+    success: true,
+    message: 'Media upload endpoint is active. Send a POST request with multipart/form-data containing "file" and your Authorization Bearer token.',
+  });
+});
+
+// POST upload single media file with categories & tags (flexible for file, image, media, or video field names)
+router.post('/upload', authenticate, requireCouple, upload.any(), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    if (!req.file) {
-      return sendError(res, 'No file provided', 400);
+    const rawFiles = req.files as Express.Multer.File[] | undefined;
+    const file = req.file || (rawFiles && Array.isArray(rawFiles) && rawFiles.length > 0 ? rawFiles[0] : undefined);
+    if (!file) {
+      return sendError(res, 'No file provided. Please attach a file using form-data field "file" or "image".', 400);
     }
 
     const { title, caption, description, categories, tags, isFavorite, takenAt } = req.body;
@@ -96,12 +106,12 @@ router.post('/upload', authenticate, requireCouple, upload.single('file'), async
       width: processed.width,
       height: processed.height,
       duration: processed.duration,
-      title: title ? String(title).trim() : (req.file.originalname.replace(/\.[^/.]+$/, '') || ''),
+      title: title ? String(title).trim() : (file.originalname.replace(/\.[^/.]+$/, '') || ''),
       caption: caption ? String(caption).trim() : '',
       description: description ? String(description).trim() : '',
       categories: parsedCategories,
       tags: parseList(tags),
-      originalFilename: req.file.originalname,
+      originalFilename: file.originalname,
       storageProvider: processed.storageProvider,
       isFavorite: isFavorite === 'true' || isFavorite === true,
       isPublished: true,
